@@ -8,3 +8,4 @@ docs/**
 *.md
 **/AGENTS.md
 apps/mobile/assets/**
+apps/mobile/expo-env.d.ts
