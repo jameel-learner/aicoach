@@ -1,0 +1,176 @@
+Features Description - IA Coach
+1. Take a text book pdf as input on any subject (Science, Commerce, Mathematics)
+	1.1. understand the images, formulae, and other tabular content within the pdf
+	1.2. understand the pdf text even if the layout if presented as 2 or more columns, like in newspaper
+	1.3. similar questions that result is similar answers to be saved along with pdf content, to avoid redundant LLM call to format answers
+	1.4. allow explicit option to force new answers for any question by the end User
+2. Help student comprehend and memorize the concepts and also prepare for their final examinations
+	2.1. Explaination journeys
+		2.1.1. Written notes to encompass content and potention board questions - (for various marks weightage - 1, 2, 3, 4, 5, 6)
+	2.2. Memorization journeys
+		2.2.1. also Writting speed to match final examination time management
+	2.3. Practice and self assessment journeys
+		2.3.1. Option of interact in both Text or Verbal audio inputs throughout the journey. App's response is Text by default
+		2.3.2. Track progress and allow to stop and continue at any logical point as required
+		2.3.3. Both Content quality and Time management to be practiced and assessed to match the examinations and self SPEED
+	2.4. Quick reference cards - Memory Maps (concised to max)
+		2.4.1. Concepts wise, Chapter wise, Subject wise
+	2.5. Test papers - as per latest board guidelines
+		2.5.1. Previous years Question papers - download and keep all that are available on the internet for that class, subject, board
+		2.5.2. Predict upcoming Question papers - in accordance to the board guidelines and previous Test Papers.
+3. Help teachers comprehend and memorize the concepts and provide assets to help them deliver their job services as in Instuctor
+	3.1. Explaination journeys
+		3.1.1. memorization
+		3.1.2. examples - real world
+	3.2. Lectureship sessions
+		3.2.1. Prepare presentations and student Notes
+		3.2.2. With the notes already prepared by the app, Design additional class room activities
+		3.2.3. To convey the concepts with increase effectiveness
+		3.2.4. To increase student retention with real life and live expirence
+		3.2.5. Project works - team activities 
+		3.2.6. Class room drills to assess student Understanding and Retention and Application (as applicable)
+4. Mobile app for the Users and Web app for the Admin dashboard
+	4.1. Registration using email & password, and two step verification on Login be default
+	4.2. Student, Teacher, Admin login roles
+		4.2.1. Each student can enroll to multiple class or subject or Institution or exam board - and expirence the different learning journeys
+		4.2.2. Each teacher can also enroll to multiple class or subject or Institution or exam board - and expirence the different teaching journeys
+	4.3. PDF to be linked to a 
+		4.3.1. Exam Board - for examination School- ICSE, SSLC, CBSE, College-PUC, ISC, Degree-BCom, BCA, BE, BSc, etc
+			4.3.1.1. Board Examination guidelines that shape the entire learning and practice journeys to prepare students to excel in their exams, at the same time acquire enhance comprehension and control over the subject learnt or thought
+			4.3.1.2. Process the guidelines and prepare strategies of all the journeys - explaination, memorization, lecturship, practice, test papers, etc
+		4.3.2. Class - grade 12 or 1, degree semister 1 to 8
+		4.3.4. Subject - any of Science (Physics, Chemistry, Biology, etc), any of Commerce (Ecomonics, Commerce, Accounts, etc)
+		4.4.4. Institution - school, college, university
+5. Attention is what is Required
+	5.1. Need to counter the student distraction due to repeated Social media notifications, that take them to time wasting browsing
+	5.2. Keep the student engaged and involved with intutive and creative timely notifications bring him back to his learning journeys
+	5.3. Latest publications on the social medias that are relavent to his learning journeys - past or present or upcoming; to be shown within the app to enjoy the latest online content, but at the same time retaining him on the learning platform itself. Sterring him back to his learning journeys through attention grabbing introspection questions after the media ends to create more inquisitness and earge to learn more - directing him back to his learning journeys
+	5.4. Give maximum priority to this feature throughout the app, across all its sections - cause this is single MOST challenging aspect of keeping both the students and teachers MOTIVATED to learn and acquire more knowledge. 
+	5.5. Suggest and Create various aspects in this app around Knowledge & Learning that targets the dominant traits prevalent in GenZ and GenAlpha today as follows --
+	# ===== RELATIONSHIP TO AI =====
+	5.5.1. 
+	- id: ai_as_collaborator
+  		label: Treats AI as a collaborator, not an oracle or a tool
+  		evidence: McKinsey State of Organizations 2026; GWI 2026 (Gen Z leads all cohorts on AI for skill-building, 40%)
+  		implication: >
+    	Expects to interrogate, contradict and redirect the tutor. A one-way explainer wastes the main affordance. Show reasoning; accept challenge.
+  		features: [socratic_explainer, teach_it_back, challenge_mode, show_working]
+
+	5.5.2. 
+	- id: utility_seeking
+  		label: Optimises for fast, useful answers
+  		evidence: Razorfish/GWI Gen Alpha study (ChatGPT ranked 4th preferred learning medium, just below teachers); hacks/how-tos/DIY among top content genres
+  		implication: >
+    		Answer first, then unpack. Preamble, onboarding tours and "let me explain my approach" lose the session. Depth must be opt-in and one tap away.
+  		features: [answer_first_layered_depth, hint_ladder, one_tap_resume]
+
+	5.5.3. 
+	- id: verification_reflex
+  		label: Trusts only what it can check; verifies independently
+  		evidence: ~70% of Gen Z trust a brand only after own research; ~49% independently verify online information; Gen Alpha measurably more brand-skeptical than parents at same age
+  		implication: >
+    		Highest-leverage trust feature in the whole app: cite the prescribed textbook location for every claim (board, chapter, page, exercise). An ungrounded AI tutor is assumed to be hallucinating, correctly. Admit uncertainty explicitly.
+  		features: [textbook_citation_grounding, uncertainty_flagging, syllabus_scope_badge]
+
+	5.5.4. 
+	- id: anti_manipulation_detection
+  		label: Detects and resents dark patterns
+  		evidence: Gen Alpha low trust in TV personalities, 21% see celebrities as role models; Gen Z authenticity demand across sources
+  		implication: >
+    		Manufactured urgency, fake scarcity and loss-framed streak panic are detected and cost trust permanently. Every retention mechanic must survive the learner reading its source code.
+  		features: [honest_progress_model, no_loss_framing]
+
+	# ===== ATTENTION SHAPE =====
+	5.5.5. 
+	- id: short_session_high_intensity
+  		label: Short sessions, high engagement within them — not short attention spans
+  		evidence: Gen Alpha research consistently rejects the short-attention-span framing; sustained engagement in gaming contexts
+  		implication: >
+    		Design 7–12 minute units that are COMPLETE: each ends at a natural stopping point with a visible win. Never leave a learner mid-concept at session end.
+  		features: [session_unit_7_12, natural_stopping_points, micro_win_close]
+
+	5.5.6. 
+	- id: mobile_video_first
+  		label: Phone-first, video-first, vertical
+		evidence: GWI 2026 (60%+ of Gen Z stream on phones; 60% used YouTube for video last month)
+  		implication: >
+    		Vertical layout, thumb-reachable controls, captions always on (shared-room and low-data use), works on mid-range Android over patchy mobile data.
+  		features: [vertical_first_ui, captioned_microvideo, offline_pack, low_bandwidth_mode]
+
+	5.5.7. 
+	- id: emotional_bandwidth_management
+  		label: Actively manages emotional load; names it early
+  		evidence: GWI 2026 Gen Alpha analysis; Deloitte 2026 on financial/career pressure
+  		implication: >
+    		Board-exam stress is the dominant emotional context. Offer scope reduction ("just do 3 questions today") rather than cheerleading. Route distress to the existing Handoff disposition, never to a motivational message.
+  		features: [reduce_scope_path, overwhelm_affordance, safety_handoff_routing]
+
+	# ===== SOCIAL & IDENTITY =====
+	5.5.8. 
+	- id: gaming_native
+  		label: Game literacy exceeds social-media literacy
+  		evidence: Newzoo 2024 Global Gamer Study — Gen Alpha first generation to spend more time gaming than on social media; 53% want games/apps that teach useful skills
+  		implication: >
+    		They read game grammar fluently: levels, hint ladders, boss encounters, retry-without-shame, co-op. Borrow the GRAMMAR (mastery gating, instant feedback, failure as information) — not the MONETISATION psychology (variable reward, loot boxes, daily-login pressure).
+  		features: [mastery_gated_progression, chapter_boss_set, retry_without_penalty, coop_study_room]
+
+	5.5.9. 
+	- id: coop_over_competition
+  		label: Socialises through shared play, not public ranking
+  		evidence: Gen Alpha socialising inside Roblox/Twitch; peer-collaborative routines
+  		implication: >
+    		Public leaderboards demotivate everyone outside the top decile and are the wrong incentive for a mastery subject. Use co-op and peer-explain instead.
+  		features: [coop_study_room, peer_explain_pairing, private_progress_only]
+
+	5.5.10. 
+	- id: creator_identity
+  		label: Wants to make and keep things, not just consume
+  		evidence: Adobe 2025 (70% of 6–12s have used creative apps and value saving/sharing their work)
+  		implication: >
+    		Learner-generated artefacts outperform delivered content on both retention and attachment. Their mnemonic, their summary card, their explainer clip. Ownership is the retention mechanism.
+  		features: [learner_authored_cards, mnemonic_cocreation, artefact_locker, shareable_summary]
+
+	5.5.11. 
+	- id: many_persistent_interests
+  		label: Roughly twice as many identifiable interests as Gen Z, and they persist
+  		evidence: Razorfish/GWI Gen Alpha study
+  		implication: >
+    		Strongest personalisation lever available that does not require behavioural profiling: let the learner DECLARE interests, then generate analogies and word problems from them. Declared > inferred (also the compliant route — see §5).
+  		features: [declared_interest_profile, interest_anchored_analogy, contextual_word_problems]
+
+	5.5.12. 
+	- id: purpose_orientation
+  		label: Needs to know why this matters
+  		evidence: Deloitte 2026 (96% of Gen Z say purpose at work matters, up from 89%); 66% of Gen Alpha prefer purpose-driven companies
+  		implication: >
+    		Two distinct "why" answers per concept, both needed: exam utility ("this is worth 5 marks, appeared in 4 of the last 6 papers") and real utility ("this is how your phone's camera focuses"). Exam utility usually wins the session.
+  		features: [why_this_matters, marks_weight_badge, real_world_hook]
+
+	# ===== INDIA-SPECIFIC =====
+	5.5.13. 
+	- id: multilingual_code_switching
+  		label: Mixes languages mid-sentence; technical terms stay English
+  		evidence: Product requirement (English / Hindi / Kannada); standard Indian classroom register
+  		implication: >
+    		Accept Hinglish/Kanglish input without correction. Explain in the chosen language but PRESERVE the English technical vocabulary the board answer script requires. Budget for Indic script token inflation in context windows.
+  		features: [code_switch_input, bilingual_term_pairing, script_aware_token_budget]
+
+	5.5.14. 
+	- id: board_exam_centrality
+  		label: Board marks are the organising fact of the year
+  		evidence: Indian board-exam structure; Deloitte 2026 on financial pressure shaping choices
+  		implication: >
+    		Every feature must answer "does this get me marks?" Honest marks-per-hour guidance beats breadth. Chapter weightage drives scheduling, not syllabus order.
+  		features: [weightage_driven_scheduler, marking_scheme_feedback, marks_prediction]
+
+	5.5.15. 
+	- id: institutional_context
+  		label: Reached through school/institution, used alongside a teacher
+  		evidence: Product architecture (institution-first B2B2C)
+  		implication: >
+    		The teacher is a user. Learner-facing attention features need a teacher-facing counterpart, and this routing is also what the DPDP educational-institution exemption in §5 is scoped to.
+  		features: [teacher_cohort_dashboard, misconception_rollup, parent_digest]
+
+6. Tech stack  		
+	6.1. Suggest What ever is best suited for such an app
+	6.2. Preferred: max that is available on Cloudflare FREE prevalent
