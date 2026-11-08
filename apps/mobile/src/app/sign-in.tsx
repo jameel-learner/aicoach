@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Turnstile } from '../components/Turnstile';
 import { Body, Button, Card, ErrorText, Screen, TextField, Title } from '../components/ui';
 import { authClient, captchaHeaders } from '../lib/auth-client';
+import { SERVER_LABEL } from '../lib/config';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -72,6 +73,7 @@ export default function SignIn() {
         variant="link"
         onPress={() => router.push('/sign-up')}
       />
+      <Body muted>{SERVER_LABEL}</Body>
     </Screen>
   );
 }

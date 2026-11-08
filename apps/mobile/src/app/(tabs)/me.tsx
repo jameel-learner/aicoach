@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Body, Button, Card, ErrorText, Heading, Screen, Title } from '../../components/ui';
 import { api, errorMessage, useMe } from '../../lib/api';
 import { authClient } from '../../lib/auth-client';
+import { SERVER_LABEL } from '../../lib/config';
 
 const CONSENT_LABEL = {
   pending: 'Waiting for them to confirm by email',
@@ -76,6 +77,7 @@ export default function Me() {
       )}
 
       <Button title="Sign out" variant="secondary" onPress={() => void signOut()} />
+      <Body muted>{SERVER_LABEL}</Body>
     </Screen>
   );
 }

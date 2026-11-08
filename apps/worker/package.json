@@ -11,8 +11,11 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:seed:local": "wrangler d1 execute DB --local --file=../../packages/db/seed/seed.sql",
     "db:make-admin:local": "node scripts/make-admin.mjs --local",
-    "deploy:staging": "wrangler deploy --env staging",
-    "cf-typegen": "wrangler types"
+    "deploy:staging": "wrangler d1 migrations apply DB --remote --env staging && wrangler deploy --env staging",
+    "cf-typegen": "wrangler types",
+    "logs:staging": "wrangler tail --env staging",
+    "db:seed:staging": "wrangler d1 execute DB --remote --env staging --file=../../packages/db/seed/seed.sql",
+    "make-admin:staging": "node scripts/make-admin.mjs --env staging"
   },
   "dependencies": {
     "@aicoach/core": "workspace:*",

@@ -4,3 +4,5 @@ BETTER_AUTH_SECRET=change-me-to-a-long-random-string-at-least-32-chars
 RESEND_API_KEY=
 # Cloudflare's public Turnstile test secret: always passes.
 TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+# Phase 1+: OpenRouter key (all LLM calls). Local AI use costs real OpenRouter credits.
+OPENROUTER_API_KEY=

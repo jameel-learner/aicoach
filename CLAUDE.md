@@ -19,6 +19,11 @@ Board-exam-aligned AI tutor for Indian students and teachers. Mobile app (studen
 
 ## Working rules
 
+- **Environments (user rule, 2026-11-08):** LOCAL, STAGING and PRODUCTION are kept strictly separate ([docs/setup-and-deployment.md](docs/setup-and-deployment.md)).
+  - **During a phase, build and test on LOCAL only.** Don't deploy to staging, set staging secrets or run staging migrations mid-phase.
+  - **Only when a phase is complete:** commit + push, CI green, set that phase's new staging secrets, `pnpm deploy:staging`, the user tests on staging, then sign-off.
+  - PRODUCTION doesn't exist yet. Never point anything at it.
+  - Every phase section in progress.md lists the staging secrets/steps it will need at phase end.
 - **One phase at a time** (§7 of the architecture doc). A phase is done only when its *Test & exit criteria* pass **and the user signs off** after a demo. Don't start the next phase without that sign-off.
 - **Commit only when the user asks** (or when the user has approved a commit-per-phase routine). Never commit secrets.
 - Keep architecture.md the source of truth. If implementation forces a design change, update the doc in the same change.
@@ -59,7 +64,7 @@ docs/            architecture.md (design), progress.md (status), setup-and-deplo
 
 ## Commands
 
-Step-by-step human guide (first-time setup, the 10-step walkthrough, troubleshooting, staging deploy): [docs/setup-and-deployment.md](docs/setup-and-deployment.md). Keep it in sync when commands or flows change.
+Human runbooks, one per environment: [local](docs/environments/local.md) · [staging](docs/environments/staging.md) · [production (planned)](docs/environments/production.md), with an overview in [docs/setup-and-deployment.md](docs/setup-and-deployment.md). Keep them in sync when commands or flows change.
 
 Run from the repo root unless noted. On Windows, pnpm is installed in `%APPDATA%
 pm` via Corepack (`corepack enable pnpm --install-directory "$APPDATA/npm"`).
@@ -71,16 +76,18 @@ pm` via Corepack (`corepack enable pnpm --install-directory "$APPDATA/npm"`).
 | Local secrets | copy `apps/worker/.dev.vars.example` to `apps/worker/.dev.vars` and set `BETTER_AUTH_SECRET` |
 | Dev: API + built web app | `pnpm dev:worker` (http://localhost:8787, also on the LAN IP for phones) |
 | Dev: web app with hot reload | `pnpm dev:web` (http://localhost:5173, proxies `/api` to :8787) |
-| Dev: mobile | `pnpm dev:mobile`, then scan the QR code in Expo Go (phone on the same Wi-Fi). API URL is auto-derived |
+| Dev: mobile (LOCAL backend) | `pnpm dev:mobile`, then scan the QR code in Expo Go (phone on the same Wi-Fi). API URL is auto-derived |
+| Mobile against STAGING (phase end only) | `pnpm dev:mobile:staging` |
 | Read dev emails (OTP, consent links) | printed in the `dev:worker` terminal, or `GET /api/dev/outbox?to=<email>` (development only) |
-| Make a user Admin (local) | `pnpm --filter @aicoach/worker db:make-admin:local -- someone@example.com` |
+| Make a user Admin | `pnpm make-admin:local <email>` / `pnpm make-admin:staging <email>` |
 | Typecheck all | `pnpm typecheck` |
 | Tests (Workers runtime + local D1) | `pnpm test` |
 | Web E2E (needs `dev:worker` running or starts it) | `pnpm --filter @aicoach/admin-web test:e2e` |
 | Format | `pnpm format` / `pnpm format:check` |
 | New DB migration | edit `packages/db/src/schema.ts`, then `pnpm db:generate` and `pnpm db:migrate:local` |
 | Mobile bundle check | `cd apps/mobile && npx expo export --platform android --output-dir <tmp>` |
-| Deploy staging | `pnpm --filter @aicoach/worker deploy:staging` (needs `wrangler login` + real ids in wrangler.jsonc) |
+| Deploy staging (phase end only) | `pnpm deploy:staging` (builds web, applies remote migrations, deploys) |
+| Staging logs (sign-in codes) | `pnpm logs:staging` |
 
 ## Environment notes
 

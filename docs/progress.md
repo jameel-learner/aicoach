@@ -10,7 +10,7 @@
 | **Current phase** | Phase 1: LLM gateway, model switching & credits (not started). Phase 0 ✅ complete |
 | **Last updated** | 2026-11-08 |
 | **Build / tests** | All green: typecheck (6 packages), 24 worker integration tests + 3 core tests (`pnpm test`), 3 Playwright browser tests (`test:e2e`), Android bundle builds |
-| **Blockers** | Phase 1 needs a **rotated** OpenRouter API key (user stores it in `apps/worker/.dev.vars` and via `wrangler secret put OPENROUTER_API_KEY --env staging`) |
+| **Blockers** | None |
 | **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live; codes via `wrangler tail --env staging`) |
 
 Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria passed + user sign-off) · ⛔ blocked
@@ -23,7 +23,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 | GitHub remote `jameel-learner/aicoach` | Phase 0 CI | ✅ remote configured |
 | Email sending: Resend account (jameel.learner@gmail.com). Without a verified domain, Resend only delivers to the account owner's address (fine for dev). **A sender domain is needed before the pilot** | Phase 0 (dev: console log) | 🟡 |
 | Android phone with Expo Go (connects by QR code on the same Wi-Fi) | Phase 0 mobile shell | ✅ |
-| OpenRouter API key, stored **only** in `apps/worker/.dev.vars` and `wrangler secret`. The key pasted in chat on 2026-11-08 should be **rotated** first | Phase 1 | 🟡 rotate, then store |
+| OpenRouter API key: stored in `apps/worker/.dev.vars` (local). The user chose to keep the key shared in chat (not rotated). Staging secret set at Phase 1 end | Phase 1 | ✅ local · ⬜ staging |
 | NCERT Accountancy PDFs: `docs/textbooks/accountancy_1.pdf` (~204 pp), `accountancy_2.pdf` (~296 pp). Git-ignored | Phase 2 | ✅ |
 | KSEAB 2nd PUC Accountancy blueprint / model papers / marking scheme | Phase 3 | ⬜ |
 
@@ -74,6 +74,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 - [ ] Platform float panel (OpenRouter balance vs outstanding credits)
 - [ ] Admin LLM playground
 - [ ] **Exit:** see architecture §7 Phase 1 + user sign-off
+- **Phase-end staging steps:** `wrangler secret put OPENROUTER_API_KEY --env staging` (from apps/worker), then `pnpm deploy:staging` (applies the Phase 1 migrations), then test credits/model switching on staging
 
 ### Phase 2: Textbook ingestion & grounded Q&A ⬜
 - [ ] Institution textbook onboarding (`institution_books`: select existing or upload new)

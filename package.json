@@ -9,6 +9,7 @@
     "dev:worker": "pnpm --filter @aicoach/worker dev",
     "dev:web": "pnpm --filter @aicoach/admin-web dev",
     "dev:mobile": "pnpm --filter @aicoach/mobile start",
+    "dev:mobile:staging": "pnpm --filter @aicoach/mobile start:staging",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
@@ -17,7 +18,11 @@
     "db:migrate:local": "pnpm --filter @aicoach/worker db:migrate:local",
     "db:seed:local": "pnpm --filter @aicoach/worker db:seed:local",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "deploy:staging": "pnpm --filter @aicoach/admin-web build && pnpm --filter @aicoach/worker deploy:staging",
+    "logs:staging": "pnpm --filter @aicoach/worker logs:staging",
+    "make-admin:local": "pnpm --filter @aicoach/worker db:make-admin:local --",
+    "make-admin:staging": "pnpm --filter @aicoach/worker make-admin:staging --"
   },
   "devDependencies": {
     "prettier": "3.9.10",
