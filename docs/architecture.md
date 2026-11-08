@@ -646,6 +646,8 @@ Each phase ends with a **deployable, demoable slice** plus automated tests and e
 **Test & exit criteria:** E2E sign-up → 2FA → login for each role. RBAC tests (a student can't reach admin APIs or other tenants). Deploy-from-main works.
 
 ### Phase 1: LLM gateway, model switching & credits
+> **Status: ✅ done 2026-11-09** (commits `c3a51f9`, `4a2509b`). Streaming and OpenRouter reconciliation moved to Phase 2. Changes made during the phase: credits in INR, credit requests with UTR verification, hidden fee, class-teacher reassignment (decisions 9.3-1 to 9.3-4).
+
 **Goal:** every LLM call goes through one metered path and is charged to the right wallet. Admin can switch models. This has to exist **before** any learner-facing AI feature.
 
 - OpenRouter client (OpenAI-compatible) behind AI Gateway, with streaming. Capture `usage.cost` + generation ID. Detect gateway cache hits
@@ -670,6 +672,7 @@ Each phase ends with a **deployable, demoable slice** plus automated tests and e
 - **Semantic answer cache + "force new answer"** (1.3–1.4) with variants
 - Mobile: "Ask your textbook" screen with answer-first streaming, KaTeX formulas, tappable citation badges, ⚠ uncertainty flags
 - Q&A metered against the student's wallet. Prompt registry with versioning
+- **Carried from Phase 1:** streaming in the metered path (settle from the final chunk; aborted streams still settle) and the reconciliation cron vs OpenRouter generation stats (difference < 0.5%)
 - **Eval harness v1:** 50+ golden questions per pilot book (concept text, journal entries, ledger/balance-sheet tables, ratio formulas, figures, 2-column pages). Runs per registry model so the Admin Models screen can show scores
 - **Attention:** answer-first format, citation badges, syllabus-scope badge
 

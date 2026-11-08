@@ -7,11 +7,11 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 1: LLM gateway, model switching & credits (🟡 built + tested locally; user's walkthrough feedback (INR, credit requests, hidden fee) implemented; waiting for user's local re-test, then staging + sign-off) |
-| **Last updated** | 2026-11-08 |
+| **Current phase** | Phase 2: Textbook ingestion & grounded Q&A (🟡 starting: checklist below; open questions under *Pending confirmations*) |
+| **Last updated** | 2026-11-09 |
 | **Build / tests** | All green: typecheck, 41 worker + 8 core tests (`pnpm test`), 4 Playwright browser tests (`test:e2e`, incl. credits, request and teacher-buy flows; test data removed afterwards), Android bundle builds |
 | **Blockers** | None |
-| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live; codes via `wrangler tail --env staging`) |
+| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live with Phase 1, commit `4a2509b`; codes via `pnpm logs:staging`) |
 
 Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria passed + user sign-off) · ⛔ blocked
 
@@ -32,8 +32,8 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Foundations | ✅ |
-| 1 | LLM gateway, model switching & credits | 🟡 |
-| 2 | Textbook ingestion & grounded Q&A | ⬜ |
+| 1 | LLM gateway, model switching & credits | ✅ (2026-11-09) |
+| 2 | Textbook ingestion & grounded Q&A | 🟡 |
 | 3 | Board strategy & pre-generated assets | ⬜ |
 | 4 | Session engine & explain/memorise journeys | ⬜ |
 | 5 | Practice, assessment & time management | ⬜ |
@@ -64,8 +64,8 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 - [x] CLAUDE.md *Commands* table
 - [x] **Exit:** E2E sign-up → 2FA → login per role; RBAC/tenant tests; deploy works; user verified all flows locally on web + phone and asked to close Phase 0 with the cloud deploy
 
-### Phase 1: LLM gateway, model switching & credits 🟡
-Backend (apps/worker): **done, 15 credits tests passing** (`test/credits.test.ts`, OpenRouter mocked in `test/openrouter-mock.ts`).
+### Phase 1: LLM gateway, model switching & credits ✅ (2026-11-09)
+Commits `c3a51f9` (phase) + `4a2509b` (class-teacher reassignment). Backend: **16 credits tests** (`test/credits.test.ts`, OpenRouter mocked in `test/openrouter-mock.ts`).
 - [x] Migration `0001_phase1_llm_credits.sql`: llm_models, model_registry, platform_settings, wallets (CHECK balance ≥ held ≥ 0), payments, allotments, allotment_edits, ledger_entries, credit_holds, llm_usage, credit_requests
 - [x] Money: wallets in **micro-INR** integers (1 credit = ₹1 = 1e6 micro), provider cost in nano-USD, converted at the Admin-set USD→INR rate (default ₹88.00, stored per usage row). Helpers + tests in `packages/core/src/money.ts` (decision 9.3-2; replaced the earlier nano-USD wallets)
 - [x] OpenRouter client (`src/llm/openrouter.ts`): `usage.cost`, generation id, fallback `models`, AI Gateway via optional `AI_GATEWAY_URL`, cache-hit (`cf-aig-cache-status: HIT`) charged 0
@@ -77,20 +77,46 @@ Backend (apps/worker): **done, 15 credits tests passing** (`test/credits.test.ts
 - [x] Email notices: credits received/corrected (to receiver), credit request (to giver)
 - [x] Web UI: Credits home + wallet page (all roles; downline, give, daily cap, allotments with confirm/correct/lock, usage), Admin Credits & payments (float, fee, record payment, issue, top-level wallets, payments list), Admin AI models (sync, per-feature model + fallback, add/remove models), AI playground (Admin; Teacher with class choice)
 - [x] Mobile: Me → My credits (balance in ₹, used 30 days, Confirm received, Request credits / "I have paid" with UTR, replies with comments)
+- [x] Change of class teacher (decision 9.3-4): Admin/POC reassign; the class's unused balance returns to the institution; teacher's own and students' credits untouched
+- [x] Local test-data clean-up (`pnpm cleanup-test:local`, also Playwright teardown); E2E refuses non-development servers
 - [x] Walkthrough feedback (decision 9.3): credit requests with **accept/reject + comment** (`src/credits/requests.ts`, `/api/credits/requests`), requests to Admin need the **UTR** and create a **pending payment** that Admin confirms (credits issued automatically) or rejects; inboxes on web Credits page (teacher/POC) and Admin *Payments to verify*; **everything in ₹** (OpenRouter float in US$ with ₹ equivalent); **fee hidden** from everyone but Admin
-- [ ] Deferred (with reason): streaming responses (first needed by Phase 2 "Ask your textbook"); OpenRouter generation-endpoint reconciliation (only matters once streams can be aborted mid-way, Phase 2); eval scores in the Models screen (eval harness is Phase 2); usage roll-up table (live aggregates are fast enough at pilot scale)
-- [ ] **Exit:** see architecture §7 Phase 1 + user sign-off
-- **Phase-end staging steps:** `wrangler secret put OPENROUTER_API_KEY --env staging` (from apps/worker), then `pnpm deploy:staging` (applies migration 0001), then in the staging Admin UI: Models → Sync, check the USD→INR rate, record a platform top-up payment and issue platform credits, then test
+- [x] **Exit criteria** (architecture §7 Phase 1), evidence in `apps/worker/test/credits.test.ts` + `e2e/credits.spec.ts`:
+  - [x] 50 concurrent calls on one wallet never overspend; `issued = Σ balances + Σ billed`; every wallet balance = Σ its ledger entries
+  - [x] Lock requires acknowledgement; an edit clears it; a locked allotment rejects every change
+  - [x] Billing exact in integers (now: USD cost × rate × 1.10, rounded half-up; platform wallet at cost)
+  - [x] Gateway cache hit charged 0
+  - [x] Visibility: each role sees own + immediate downline only; Admin sees all
+  - [x] Model switch takes effect without a redeploy (30 s registry cache)
+  - [→] *Streaming* and *reconciliation vs OpenRouter < 0.5%*: **moved to Phase 2** with the user's sign-off (non-streamed calls are settled from OpenRouter's own `usage.cost`, so there is nothing to reconcile until streams can be aborted)
+  - [x] User sign-off after local + staging walkthroughs (2026-11-09)
+- **Deferred to Phase 2:** streaming responses; generation-endpoint reconciliation cron; eval scores on the Models screen. **Deferred (no phase yet):** usage roll-up table (live aggregates are fast enough at pilot scale); low-balance alert emails.
+- **Staging (done 2026-11-09):** `OPENROUTER_API_KEY` secret set; `pnpm deploy:staging` applied migration 0001; models synced; user walked through the 13-step credits & AI flow on staging.
 
-### Phase 2: Textbook ingestion & grounded Q&A ⬜
-- [ ] Institution textbook onboarding (`institution_books`: select existing or upload new)
-- [ ] `IngestBook` workflow (OpenRouter PDF parse → figures → structure → QA gate → chunk → embed → Vectorize + FTS5)
-- [ ] Admin parse-review screen
-- [ ] Retrieval (hybrid + rerank + scoping) + citation verifier
-- [ ] Semantic answer cache + force-new variants (metered)
-- [ ] Mobile "Ask your textbook" (streaming, tables/formulas, citation badges)
-- [ ] Eval harness v1 (50+ golden Qs on NCERT Accountancy)
-- [ ] **Exit:** see architecture §7 Phase 2 + user sign-off
+### Phase 2: Textbook ingestion & grounded Q&A 🟡 (started 2026-11-09)
+Pilot book: NCERT Accountancy Class 12, Parts I & II (`docs/textbooks/accountancy_1.pdf`, `accountancy_2.pdf`).
+
+**Carried over / housekeeping**
+- [ ] ESLint (typescript-eslint + react-hooks), deferred from Phase 0 "before Phase 2"
+- [ ] Streaming in `runMeteredChat` (SSE to web/mobile), settle from the final chunk's `usage.cost`; client abort still settles (from Phase 1)
+- [ ] Reconciliation cron vs OpenRouter generation stats, `adjust` ledger entries; exit: difference < 0.5% (from Phase 1)
+
+**Ingestion**
+- [ ] Schema: `books`, `book_pages`, `chunks` (+ FTS5), `institution_books` (decision 9.2-1), `ingest_jobs`
+- [ ] Admin: upload PDF to R2, link to board/level/subject; map institutions to books (select existing or upload new)
+- [ ] `IngestBook` Workflow: OpenRouter PDF parse (per page Markdown) → figure descriptions → structure (chapters/sections) → QA gate → chunk → embed (Workers AI) → Vectorize + FTS5. Charged to the platform wallet
+- [ ] Admin parse-review screen (page image vs Markdown, edit/approve)
+
+**Q&A**
+- [ ] Retrieval: hybrid (Vectorize + FTS5), rerank, enrolment/institution scoping, citation packaging, citation verifier
+- [ ] Semantic answer cache + "force new answer" variants (metered to the student's wallet)
+- [ ] Prompt registry with versions
+- [ ] Mobile "Ask your textbook": answer-first streaming, tables, KaTeX formulas, tappable citation badges, ⚠ "not in your textbook" / uncertainty flag, syllabus-scope badge
+
+**Evaluation**
+- [ ] Eval harness v1 (`evals/`): 50+ golden questions on NCERT Accountancy (concept text, journal entries, ledger/balance-sheet tables, ratio formulas, figures, 2-column pages); runs per registry model; scores shown on the Admin Models screen
+
+- [ ] **Exit:** parsing fixtures pass (multi-column order, LaTeX, tables); golden-set citation accuracy ≥ 90%, answer correctness ≥ 85% (judge + human sample); cache hit < 300 ms; force-new creates a variant; streaming + reconciliation < 0.5% (carried); user sign-off
+- **Phase-end staging steps (planned, refine during the phase):** create staging R2 bucket and Vectorize index (`wrangler r2 bucket create …`, `wrangler vectorize create … --dimensions <model dims> --metric cosine`) and add their bindings + Workers AI + Workflow under `env.staging` in wrangler.jsonc; `pnpm deploy:staging` (applies the Phase 2 migration); upload the two NCERT PDFs on staging and run ingestion there (charged to the staging platform wallet, ~US$ estimate recorded during the phase); likely **Workers Paid** (US$5/month) first because ingestion and streaming exceed the free 10 ms CPU limit
 
 ### Phases 3–9 ⬜
 Checklists are expanded from architecture §7 when the phase starts.
@@ -103,11 +129,15 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Better Auth rate limiting is disabled in the test env, so the classroom-sized limits in `auth.ts` aren't covered by automated tests.
 - Resend free tier without a verified domain only delivers to the account owner's address. Real users need a domain before the pilot. Staging currently uses EMAIL_PROVIDER=console (codes in `wrangler tail`).
 - Staging uses Cloudflare's Turnstile **test** keys (no bot protection). Create a real widget before the pilot.
-- Free-plan CPU: measured on staging, warm requests 1 to 14 ms, sign-in ~45 ms (PBKDF2), cold starts up to ~100 ms; limit is 10 ms. All succeeded, but move to Workers Paid (US$5/month) before real users. Phase 1 (LLM streaming) is the natural point.
+- Free-plan CPU: measured on staging, warm requests 1 to 14 ms, sign-in ~45 ms (PBKDF2), cold starts up to ~100 ms; limit is 10 ms. All succeeded, but move to Workers Paid (US$5/month) before real users. Phase 2 (streaming + ingestion) is the natural point.
+- Low-balance alert emails (architecture §6.6 views) not built yet; balances and requests cover the pilot flow.
 
 ## Pending confirmations
 
-*(none. Allotment lifecycle confirmed 2026-11-08: allot → spend → receiver acknowledges → giver locks; edits only while open.)*
+- **Phase 2, Vectorize for LOCAL development:** Vectorize has no local simulator. Proposal: a separate **dev** index (`aicoach-dev-chunks`) on the Cloudflare account, bound with `remote: true` in the dev config only. It is not staging and holds only local test vectors. Needs the user's OK because it creates a Cloudflare resource during the phase.
+- **Phase 2, ingestion cost:** parsing ~500 pages through OpenRouter (PDF/OCR + figure descriptions) costs real credit; estimate to be measured on 5 pages first and confirmed before a full-book run.
+- **Phase 2, Workers Paid:** needed before staging ingestion/streaming (free plan 10 ms CPU). Decision at phase end.
+- *(Resolved: allotment lifecycle confirmed 2026-11-08.)*
 
 ## Session log
 
@@ -158,3 +188,9 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Next: user re-tests on LOCAL (local.md §3b, updated), then commit + staging + sign-off.
 - 2026-11-09: **Change of class teacher** (user request, decision 9.3-4, architecture §6.6): Admin/POC can reassign a class (web: *Change* → *Reassign* on the institution page). In one batch: the class wallet's unused balance returns to the institution (locked allotment class → institution, visible in both histories), the old teacher's teacher-enrolment ends, their pending requests for the class are cancelled. Students' and the teacher's own credits are untouched. `returnToParent` in `src/credits/ledger.ts`. Tests: worker 41 (new reassignment test incl. ledger invariant), E2E credits flow ends with a reassignment (₹33 returned). Not yet committed/deployed: commit + `pnpm deploy:staging` again before the staging walkthrough.
 - 2026-11-09: User approved the local tests. Phase 1 committed (`c3a51f9`) and pushed; staging secret `OPENROUTER_API_KEY` set (piped from `.dev.vars`, never printed). staging.md got a Phase 1 section (§3a) and the reasoning for keeping E2E local-only (§3b). Next: user runs `pnpm deploy:staging` (migration 0001), walks through §3a step 4, signs off.
+
+### 2026-11-09 (Phase 1 sign-off)
+- User tested Phase 1 on LOCAL and STAGING (13-step credits & AI walkthrough incl. class-teacher reassignment) and signed off. **Phase 1 complete.**
+- Exit criteria recorded above; streaming and OpenRouter reconciliation moved to Phase 2 with sign-off.
+- Docs closed out: progress.md (Phase 1 ✅, Phase 2 checklist + planned staging steps + pending confirmations), architecture §7 (Phase 1 status, carried items in Phase 2), staging.md (live version), CLAUDE.md (repository map: real vs planned folders).
+- Next: Phase 2. First steps: ESLint, then schema + R2 upload + ingestion of a few pages to measure cost, once the Vectorize dev-index question is answered.

@@ -49,17 +49,17 @@ TypeScript monorepo (pnpm workspaces + Turborepo) · Expo/React Native (mobile) 
 
 ```
 apps/mobile      Expo app
-apps/admin-web   React + Vite web app (Admin / POC / Teacher areas)
-apps/worker      Cloudflare Worker: Hono API, Durable Objects, Workflows, cron
-packages/core    domain types, Zod schemas, journey graph engine
-packages/db      Drizzle schema + migrations
-packages/rag     retrieval, rerank, citations, answer cache
-packages/llm     model registry client, router, prompts, metering hooks
-packages/journeys journey graph definitions
+apps/admin-web   React + Vite web app (Admin / POC / Teacher areas); e2e/ = Playwright (LOCAL only)
+apps/worker      Cloudflare Worker: Hono API (src/routes), credits (src/credits), LLM path (src/llm),
+                 cron (src/cron.ts); scripts/ = make-admin, cleanup-test-data
+packages/core    domain types, Zod schemas, money (micro-INR / nano-USD), LLM task list
+packages/db      Drizzle schema + migrations + seed (reference data only)
 packages/ui-tokens design tokens
-evals/           golden sets + eval runner
-docs/            architecture.md (design), progress.md (status), setup-and-deployment.md (how to run/deploy),
-                 engagement-policy.md (review checklist), feature_description.txt (original spec)
+docs/            architecture.md (design), progress.md (status), setup-and-deployment.md + environments/
+                 (how to run/deploy), engagement-policy.md (review checklist), feature_description.txt (spec)
+
+Planned (create when the phase needs it): packages/rag (retrieval, citations, answer cache, Phase 2),
+packages/journeys (journey graphs, Phase 4), evals/ (golden sets + runner, Phase 2).
 ```
 
 *(Keep this map current when the structure changes.)*
