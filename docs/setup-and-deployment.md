@@ -9,7 +9,7 @@ How to install, run and try the whole application on a Windows PC and an Android
 | [3. First-time walkthrough (10 steps)](#3-first-time-walkthrough-10-steps) | First run on a fresh local database, or a full demo |
 | [4. Stopping](#4-stopping) | End of a session |
 | [5. Troubleshooting](#5-troubleshooting) | Something doesn't work |
-| [6. Deploying to Cloudflare (staging)](#6-deploying-to-cloudflare-staging) | Putting the app online |
+| [6. Deploying to Cloudflare (staging)](#6-deploying-to-cloudflare-staging) | Using or updating the online (cloud) version |
 | [7. Useful commands](#7-useful-commands) | Quick reference |
 
 > **How sign-in works:** there are no ready-made accounts or passwords. Everyone signs up with their own email and a password they choose. Every sign-in then needs a **6-digit code**. Locally no email is sent; the code is printed in the **server terminal** (Terminal 1).
@@ -204,33 +204,37 @@ pnpm db:seed:local
 
 ## 6. Deploying to Cloudflare (staging)
 
-> **Status:** not done yet. `wrangler login` was completed on 2026-11-08 (account jameel.outskill@gmail.com). The remaining steps are run together with Claude and this section is updated when staging is live.
+> **Status: live since 2026-11-08.** **https://aicoach-api-staging.jameel-outskill.workers.dev** (web app + API on one address), Cloudflare account jameel.outskill@gmail.com, database `aicoach-staging` (region APAC). The full sign-up, code and sign-in flow was tested end to end against it.
 
-Staging is an online copy of the app on Cloudflare's free plan, at `https://aicoach-api-staging.<your-subdomain>.workers.dev` (API + web app on one address).
+### 6.1 Using staging
 
-**One-time setup:**
+**Sign-in codes on staging:** no real email is sent yet (`EMAIL_PROVIDER` is `console`). Codes and consent links appear in the **live Cloudflare log**. Keep this running in a terminal while you use staging:
 
 ```powershell
 cd E:\repository\aicoach\apps\worker
-
-# 1) Confirm the Cloudflare login
-pnpm exec wrangler whoami
-
-# 2) Create the staging database; copy the printed database_id
-pnpm exec wrangler d1 create aicoach-staging
+pnpm exec wrangler tail --env staging
 ```
 
-3. In `apps\worker\wrangler.jsonc`, under `env.staging`, replace `REPLACE_WITH_STAGING_D1_ID` with that id, and `REPLACE_WITH_SUBDOMAIN` with your workers.dev subdomain (shown in the Cloudflare dashboard → Workers & Pages).
+Look for `[notify:email] (2fa_otp)` and `Your sign-in code is ######`, exactly like Terminal 1 locally. Logs are also in the Cloudflare dashboard → Workers & Pages → aicoach-api-staging → Logs.
 
-4. Set the staging secrets (each command asks for the value):
-   ```powershell
-   pnpm exec wrangler secret put BETTER_AUTH_SECRET --env staging     # new long random string, different from local
-   pnpm exec wrangler secret put RESEND_API_KEY --env staging         # from resend.com → API Keys
-   pnpm exec wrangler secret put TURNSTILE_SECRET_KEY --env staging   # from Cloudflare → Turnstile
-   ```
-   In Cloudflare → **Turnstile**, create a widget for the staging hostname and put its **site key** into `TURNSTILE_SITE_KEY` under `env.staging.vars` in wrangler.jsonc.
+**Make yourself Admin on staging** (after signing up on the staging website as Teacher):
 
-**Each deployment:**
+```powershell
+cd E:\repository\aicoach\apps\worker
+node scripts\make-admin.mjs --env staging jameel.learner@gmail.com
+```
+
+Then follow the same walkthrough as [section 3](#3-first-time-walkthrough-10-steps), using the staging address instead of localhost. Parent consent links in the log already point to the staging address.
+
+**Phone app against staging:** create the file `apps\mobile\.env` containing
+
+```
+EXPO_PUBLIC_API_URL=https://aicoach-api-staging.jameel-outskill.workers.dev
+```
+
+then restart `pnpm dev:mobile` (press **Ctrl+C**, run it again, re-scan). The phone then works over mobile data too, not only home Wi-Fi. Delete the file (and restart) to go back to the local server.
+
+### 6.2 Deploying a new version
 
 ```powershell
 cd E:\repository\aicoach
@@ -238,21 +242,30 @@ pnpm --filter @aicoach/admin-web build
 cd apps\worker
 pnpm exec wrangler d1 migrations apply DB --remote --env staging
 pnpm exec wrangler deploy --env staging
-# first time only: load the pilot data
-pnpm exec wrangler d1 execute DB --remote --env staging --file=../../packages/db/seed/seed.sql
 ```
 
-**Make an Admin on staging** (after that person signs up on the staging site):
+`migrations apply` does nothing if there are no new migrations, so it's safe to run every time.
 
-```powershell
-node scripts\make-admin.mjs --env staging jameel.learner@gmail.com
-```
+### 6.3 How staging was set up (for reference / a new environment)
 
-**Email on staging:** without a verified domain, Resend only delivers to the Resend account owner's address (jameel.learner@gmail.com). Real users need a verified sender domain before the pilot.
+1. `pnpm exec wrangler login`, then `pnpm exec wrangler whoami`.
+2. `pnpm exec wrangler d1 create aicoach-staging`, and the printed `database_id` was put under `env.staging` in `apps\worker\wrangler.jsonc`.
+3. First `wrangler deploy --env staging` printed the address; `APP_URL` and `WEB_ORIGIN` in wrangler.jsonc were set to it.
+4. Secrets: `BETTER_AUTH_SECRET` (random, different from local) and `TURNSTILE_SECRET_KEY` with `wrangler secret put <NAME> --env staging`. Secrets live only in Cloudflare and are never in git.
+5. Migrations applied and pilot data loaded once:
+   `pnpm exec wrangler d1 execute DB --remote --env staging --file=../../packages/db/seed/seed.sql`
 
-**Mobile app against staging:** create `apps\mobile\.env` with `EXPO_PUBLIC_API_URL=https://aicoach-api-staging.<subdomain>.workers.dev` and restart `pnpm dev:mobile`.
+### 6.4 Still to do before real users (pilot)
 
-**Automatic deploys (later):** `.github/workflows/ci.yml` can deploy staging on every push to `main` once the GitHub repo has secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` and the repo variable `STAGING_DEPLOY_ENABLED=true`.
+| Item | Why | How |
+|---|---|---|
+| **Real email** | Users must receive codes by email | Verify a domain you own in Resend, then `wrangler secret put RESEND_API_KEY --env staging`, set `EMAIL_PROVIDER` to `resend` and `EMAIL_FROM` to an address on that domain, redeploy. Without a domain Resend only delivers to its account owner. |
+| **Real Turnstile keys** | The current keys are Cloudflare's *test* keys (always pass, no bot protection) | Cloudflare dashboard → Turnstile → add widget for the staging hostname; put the site key in `TURNSTILE_SITE_KEY` (wrangler.jsonc) and the secret via `wrangler secret put TURNSTILE_SECRET_KEY --env staging`. |
+| **Workers Paid plan (US$5/month)** | Free plan allows 10 ms CPU per request. Measured on staging: typical requests 1 to 14 ms, sign-in about 45 ms (password hashing), cold starts up to about 100 ms. All succeeded, but under real load requests over the limit can be stopped (error 1102). | Cloudflare dashboard → Workers & Pages → Plans. No code change needed. |
+
+### 6.5 Automatic deploys (optional, later)
+
+`.github/workflows/ci.yml` can deploy staging on every push to `main` once the GitHub repo has secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` and the repo variable `STAGING_DEPLOY_ENABLED=true`.
 
 ---
 
@@ -275,3 +288,5 @@ Run from `E:\repository\aicoach`.
 | Run all tests | `pnpm test` |
 | Browser end-to-end tests | `pnpm --filter @aicoach/admin-web test:e2e` |
 | Format code | `pnpm format` |
+| Deploy staging | build web app, then in `apps\worker`: `pnpm exec wrangler d1 migrations apply DB --remote --env staging` and `pnpm exec wrangler deploy --env staging` |
+| Watch staging logs (codes) | in `apps\worker`: `pnpm exec wrangler tail --env staging` |

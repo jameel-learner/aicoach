@@ -7,10 +7,11 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 0: Foundations (local flows verified by user on web + phone; staging deploy + CI run pending) |
+| **Current phase** | Phase 1: LLM gateway, model switching & credits (not started). Phase 0 ✅ complete |
 | **Last updated** | 2026-11-08 |
 | **Build / tests** | All green: typecheck (6 packages), 24 worker integration tests + 3 core tests (`pnpm test`), 3 Playwright browser tests (`test:e2e`), Android bundle builds |
-| **Blockers** | None for local. Remaining Phase 0: staging deploy (wrangler login done), first CI run on GitHub (needs push) |
+| **Blockers** | Phase 1 needs a **rotated** OpenRouter API key (user stores it in `apps/worker/.dev.vars` and via `wrangler secret put OPENROUTER_API_KEY --env staging`) |
+| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live; codes via `wrangler tail --env staging`) |
 
 Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria passed + user sign-off) · ⛔ blocked
 
@@ -18,7 +19,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 
 | Item | Needed by | Status |
 |---|---|---|
-| Cloudflare account (jameel.outskill@gmail.com); user runs `pnpm wrangler login` once (browser sign-in) | Phase 0 deploy | 🟡 account ready, login pending |
+| Cloudflare account (jameel.outskill@gmail.com), `wrangler login` done | Phase 0 deploy | ✅ |
 | GitHub remote `jameel-learner/aicoach` | Phase 0 CI | ✅ remote configured |
 | Email sending: Resend account (jameel.learner@gmail.com). Without a verified domain, Resend only delivers to the account owner's address (fine for dev). **A sender domain is needed before the pilot** | Phase 0 (dev: console log) | 🟡 |
 | Android phone with Expo Go (connects by QR code on the same Wi-Fi) | Phase 0 mobile shell | ✅ |
@@ -30,8 +31,8 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Foundations | 🟡 |
-| 1 | LLM gateway, model switching & credits | ⬜ |
+| 0 | Foundations | ✅ |
+| 1 | LLM gateway, model switching & credits | 🟡 next |
 | 2 | Textbook ingestion & grounded Q&A | ⬜ |
 | 3 | Board strategy & pre-generated assets | ⬜ |
 | 4 | Session engine & explain/memorise journeys | ⬜ |
@@ -45,7 +46,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 
 ## Phase checklists
 
-### Phase 0: Foundations 🟡
+### Phase 0: Foundations ✅ (2026-11-08)
 - [x] Monorepo scaffold (pnpm 12 workspaces, hoisted, Turborepo, TS 6 strict, Prettier, Vitest 4)
 - [ ] ESLint (deferred: Prettier + strict TS cover Phase 0; add with typescript-eslint + react-hooks before Phase 2)
 - [x] `apps/worker`: Hono app, wrangler config (dev + staging env; staging ids are placeholders), `/api/health`, `/api/config`
@@ -58,10 +59,10 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 - [x] `apps/mobile` (Expo SDK 58): sign-in/up + Turnstile (WebView) + email code, onboarding (parent contact + consent ack → join class by code or self-study), enrolment switcher, tabs Home/Learn/Practice/Me. Typechecks and bundles; **not yet run on a device**
 - [x] Design tokens (`packages/ui-tokens`, light/dark) + accessibility baseline (48dp targets, labels/roles, 16px body, focus rings)
 - [x] Engagement policy checklist: [engagement-policy.md](engagement-policy.md)
-- [x] CI workflow `.github/workflows/ci.yml` (format, typecheck, tests, web build). Not yet run on GitHub (needs push)
-- [ ] Staging deploy: `wrangler login`, `wrangler d1 create aicoach-staging`, put id + workers.dev subdomain in wrangler.jsonc, set secrets, deploy
+- [x] CI workflow `.github/workflows/ci.yml` (format, typecheck, tests, web build). First run on GitHub passed (commit 7a104c4)
+- [x] Staging deploy: D1 `aicoach-staging` (APAC), secrets set, migrated + seeded, live at https://aicoach-api-staging.jameel-outskill.workers.dev. End-to-end smoke test (sign-up → sign-in → code from cloud logs → /me) passed
 - [x] CLAUDE.md *Commands* table
-- [ ] **Exit:** E2E sign-up → 2FA → login per role; RBAC/tenant tests; deploy works; user sign-off
+- [x] **Exit:** E2E sign-up → 2FA → login per role; RBAC/tenant tests; deploy works; user verified all flows locally on web + phone and asked to close Phase 0 with the cloud deploy
 
 ### Phase 1: LLM gateway, model switching & credits ⬜
 - [ ] OpenRouter client via AI Gateway (streaming, `usage.cost`, generation ID, gateway cache-hit detection)
@@ -93,7 +94,9 @@ Checklists are expanded from architecture §7 when the phase starts.
 
 - Turnstile on mobile loads in a WebView with baseUrl = API URL. In staging/prod the Turnstile site key must allow that hostname. Untested on a device.
 - Better Auth rate limiting is disabled in the test env, so the classroom-sized limits in `auth.ts` aren't covered by automated tests.
-- Resend free tier without a verified domain only delivers to the account owner's address. Real users need a domain before the pilot.
+- Resend free tier without a verified domain only delivers to the account owner's address. Real users need a domain before the pilot. Staging currently uses EMAIL_PROVIDER=console (codes in `wrangler tail`).
+- Staging uses Cloudflare's Turnstile **test** keys (no bot protection). Create a real widget before the pilot.
+- Free-plan CPU: measured on staging, warm requests 1 to 14 ms, sign-in ~45 ms (PBKDF2), cold starts up to ~100 ms; limit is 10 ms. All succeeded, but move to Workers Paid (US$5/month) before real users. Phase 1 (LLM streaming) is the natural point.
 
 ## Pending confirmations
 
@@ -113,4 +116,7 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Phone test bug (fixed): signed-out users landed on the "Enter your code" screen (router fallback picked `verify`). `verify` now redirects to sign-in unless a sign-in is in progress, and has a "Back to sign in" link; sign-up's "I already have an account" now replaces to sign-in.
 - Phone test bug 2 (fixed): after the password step the app bounced back to sign-in. Root cause: Better Auth sets `isPending=true` on every session re-check while signed out, and the root layout swapped the whole <Stack> for a spinner, which discarded navigation state. The Stack now stays mounted after first boot; loading and error states are overlays (`apps/mobile/src/app/_layout.tsx`). This was also the real cause of bug 1.
 - **User verified all 10 walkthrough steps on web + Android phone (all login/onboarding flows work).** Steps saved as [setup-and-deployment.md](setup-and-deployment.md).
-- Next: user tests on phone + signs off; staging deploy once `wrangler login` is done; then commit Phase 0 and start Phase 1.
+- Committed Phase 0 (7a104c4) and pushed; first GitHub CI run passed.
+- Staging deployed. Perf fix: Better Auth instance is now cached per isolate (`getAuth`) instead of rebuilt on every request (warm /api/health 2–4 ms → 0–1 ms). Missing RESEND_API_KEY no longer breaks every route (fails only on send).
+- Guide updated: docs/setup-and-deployment.md §6 (using staging, deploying, what's left before the pilot).
+- **Phase 0 complete.** Next: Phase 1, starting with the user rotating the OpenRouter key.

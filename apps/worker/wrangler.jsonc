@@ -43,15 +43,15 @@
         {
           "binding": "DB",
           "database_name": "aicoach-staging",
-          "database_id": "REPLACE_WITH_STAGING_D1_ID",
+          "database_id": "d1cc7789-d5f0-4de1-a872-ef0c8cd765f4",
           "migrations_dir": "../../packages/db/migrations",
         },
       ],
       "vars": {
         "APP_ENV": "staging",
-        "APP_URL": "https://aicoach-api-staging.REPLACE_WITH_SUBDOMAIN.workers.dev",
-        "WEB_ORIGIN": "https://aicoach-api-staging.REPLACE_WITH_SUBDOMAIN.workers.dev",
-        "EMAIL_PROVIDER": "resend",
+        "APP_URL": "https://aicoach-api-staging.jameel-outskill.workers.dev",
+        "WEB_ORIGIN": "https://aicoach-api-staging.jameel-outskill.workers.dev",
+        "EMAIL_PROVIDER": "console", // codes visible via `wrangler tail --env staging`; switch to "resend" once a key + domain exist
         "EMAIL_FROM": "AI Coach <onboarding@resend.dev>",
         "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
       },

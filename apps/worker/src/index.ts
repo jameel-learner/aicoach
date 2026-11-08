@@ -2,7 +2,7 @@ import { createDb } from '@aicoach/db';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
-import { createAuth } from './auth';
+import { getAuth } from './auth';
 import type { AppBindings, Env } from './env';
 import { AppError } from './lib/http';
 import { createNotifier, memoryOutbox } from './lib/notifier';
@@ -20,7 +20,7 @@ export function createApp() {
   app.use('*', async (c, next) => {
     c.set('db', createDb(c.env.DB));
     c.set('notifier', createNotifier(c.env));
-    c.set('auth', createAuth(c.env, c.executionCtx));
+    c.set('auth', getAuth(c.env));
     await next();
   });
 

@@ -20,7 +20,22 @@ import { hashPassword, verifyPassword } from './lib/password';
  *   proves the user owns the address (we then mark emailVerified=true)
  * - roles: users may self-select only "student" or "teacher"
  */
-export function createAuth(env: Env, ctx?: Pick<ExecutionContext, 'waitUntil'>) {
+/**
+ * One Better Auth instance per Worker isolate. Building it costs several ms of CPU, which matters
+ * on the free plan's 10 ms/request budget, and it holds no per-request state. Workers pass the
+ * same `env` object to every request in an isolate, so it works as the cache key.
+ */
+const authCache = new WeakMap<Env, ReturnType<typeof createAuth>>();
+export function getAuth(env: Env) {
+  let auth = authCache.get(env);
+  if (!auth) {
+    auth = createAuth(env);
+    authCache.set(env, auth);
+  }
+  return auth;
+}
+
+export function createAuth(env: Env) {
   const db = createDb(env.DB);
   const notifier = createNotifier(env);
   const isTest = env.APP_ENV === 'test';
@@ -96,9 +111,8 @@ export function createAuth(env: Env, ctx?: Pick<ExecutionContext, 'waitUntil'>) 
         '/two-factor/verify-otp': { window: 60, max: 120 },
       },
     },
-    advanced: {
-      ...(ctx ? { backgroundTasks: { handler: (p: Promise<unknown>) => ctx.waitUntil(p) } } : {}),
-    },
+    // No backgroundTasks handler: the instance is shared across requests (see getAuth), so email
+    // sends are awaited within the request instead (I/O wait, not CPU time).
     plugins: [
       twoFactor({
         issuer: 'AI Coach',
