@@ -884,3 +884,95 @@ describe('credit requests (decision 9.3-1)', () => {
     ).toBe(200);
   });
 });
+
+describe('change of class teacher (decision 9.3-4)', () => {
+  it("returns the class's unused credits to the institution; personal and student credits stay", async () => {
+    const t = await buildTree();
+    const newTeacher = await createSignedInUser('teacher');
+    const outsider = await createSignedInUser('teacher');
+    await issue(t.admin.jar, t.inst.id, '100');
+    await call('POST', '/api/credits/allotments', {
+      jar: t.poc.jar,
+      body: { fromWalletId: t.instW.id, toWalletId: t.classW.id, credits: '40' },
+    });
+    await call('POST', '/api/credits/allotments', {
+      jar: t.teacher.jar,
+      body: { fromWalletId: t.classW.id, toWalletId: t.studentW.id, credits: '5' },
+    });
+    // The teacher's own (direct) wallet, bought from Admin
+    const directW = (await walletsOf(t.teacher.jar)).find(
+      (w) => w.ownerType === 'user' && w.label.includes('direct'),
+    );
+    await call('POST', '/api/admin/credits/issue', {
+      jar: t.admin.jar,
+      body: { target: { type: 'user', email: t.teacher.email }, credits: '20' },
+    });
+    // A pending request from the class to the POC
+    await call('POST', '/api/credits/requests', {
+      jar: t.teacher.jar,
+      body: { walletId: t.classW.id, credits: '10' },
+    });
+
+    const path = `/api/institutions/${t.inst.id}/classes/${t.cls.id}/teacher`;
+    // Only Admin / POC can reassign
+    expect(
+      (await call('PUT', path, { jar: outsider.jar, body: { email: newTeacher.email } })).status,
+    ).toBe(403);
+    const res = await call('PUT', path, { jar: t.poc.jar, body: { email: newTeacher.email } });
+    expect(res.status).toBe(200);
+    expect((await json(res)).returnedMicro).toBe(35 * MICRO);
+
+    // ₹35 back with the institution; class empty; student and teacher's own credits untouched
+    expect((await balanceMicro(t.instW.id)).balance_micro).toBe(95 * MICRO);
+    expect((await balanceMicro(t.classW.id)).balance_micro).toBe(0);
+    expect((await balanceMicro(t.studentW.id)).balance_micro).toBe(5 * MICRO);
+    expect((await balanceMicro(directW.id)).balance_micro).toBe(20 * MICRO);
+
+    // Both sides see the return in their history (locked)
+    const instView = await json(await walletView(t.poc.jar, t.instW.id));
+    expect(instView.allotments[0]).toMatchObject({
+      direction: 'in',
+      amountMicro: 35 * MICRO,
+      status: 'locked',
+    });
+
+    // Old teacher: no longer manages the class wallet, class gone from their list; own wallet stays
+    expect((await walletView(t.teacher.jar, t.classW.id)).status).toBe(403);
+    const oldMine = await walletsOf(t.teacher.jar);
+    expect(oldMine.some((w) => w.id === t.classW.id)).toBe(false);
+    expect(oldMine.some((w) => w.id === directW.id)).toBe(true);
+    const oldClasses = await json<any[]>(
+      await call('GET', '/api/teacher/classes', { jar: t.teacher.jar }),
+    );
+    expect(oldClasses.some((c) => c.id === t.cls.id)).toBe(false);
+    // Their pending request for the class was cancelled
+    const req = (
+      await json<any[]>(
+        await call('GET', '/api/credits/requests?scope=mine', { jar: t.teacher.jar }),
+      )
+    ).find((r) => r.wallet.id === t.classW.id);
+    expect(req).toMatchObject({ status: 'cancelled', decisionNote: 'Class teacher changed' });
+
+    // New teacher manages the class wallet (₹0) and can receive a fresh allotment
+    expect((await walletView(newTeacher.jar, t.classW.id)).status).toBe(200);
+    expect(
+      (
+        await call('POST', '/api/credits/allotments', {
+          jar: t.poc.jar,
+          body: { fromWalletId: t.instW.id, toWalletId: t.classW.id, credits: '10' },
+        })
+      ).status,
+    ).toBe(201);
+
+    // Admin can reassign back; nothing left over is lost and the ledger still balances
+    expect(
+      (await call('PUT', path, { jar: t.admin.jar, body: { email: t.teacher.email } })).status,
+    ).toBe(200);
+    expect((await balanceMicro(t.instW.id)).balance_micro).toBe(95 * MICRO);
+    expect((await walletView(t.teacher.jar, t.classW.id)).status).toBe(200);
+    const mismatch = await env.DB.prepare(
+      'SELECT w.id FROM wallets w LEFT JOIN (SELECT wallet_id, sum(amount_micro) s FROM ledger_entries GROUP BY wallet_id) l ON l.wallet_id = w.id WHERE w.balance_micro != coalesce(l.s, 0)',
+    ).all();
+    expect(mismatch.results).toEqual([]);
+  });
+});

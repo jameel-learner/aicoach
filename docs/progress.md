@@ -9,7 +9,7 @@
 |---|---|
 | **Current phase** | Phase 1: LLM gateway, model switching & credits (🟡 built + tested locally; user's walkthrough feedback (INR, credit requests, hidden fee) implemented; waiting for user's local re-test, then staging + sign-off) |
 | **Last updated** | 2026-11-08 |
-| **Build / tests** | All green: typecheck, 40 worker + 8 core tests (`pnpm test`), 4 Playwright browser tests (`test:e2e`, incl. credits, request and teacher-buy flows; test data removed afterwards), Android bundle builds |
+| **Build / tests** | All green: typecheck, 41 worker + 8 core tests (`pnpm test`), 4 Playwright browser tests (`test:e2e`, incl. credits, request and teacher-buy flows; test data removed afterwards), Android bundle builds |
 | **Blockers** | None |
 | **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live; codes via `wrangler tail --env staging`) |
 
@@ -23,7 +23,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 | GitHub remote `jameel-learner/aicoach` | Phase 0 CI | ✅ remote configured |
 | Email sending: Resend account (jameel.learner@gmail.com). Without a verified domain, Resend only delivers to the account owner's address (fine for dev). **A sender domain is needed before the pilot** | Phase 0 (dev: console log) | 🟡 |
 | Android phone with Expo Go (connects by QR code on the same Wi-Fi) | Phase 0 mobile shell | ✅ |
-| OpenRouter API key: stored in `apps/worker/.dev.vars` (local). The user chose to keep the key shared in chat (not rotated). Staging secret set at Phase 1 end | Phase 1 | ✅ local · ⬜ staging |
+| OpenRouter API key: stored in `apps/worker/.dev.vars` (local). The user chose to keep the key shared in chat (not rotated). Same key set as staging secret on 2026-11-09 | Phase 1 | ✅ local · ✅ staging |
 | NCERT Accountancy PDFs: `docs/textbooks/accountancy_1.pdf` (~204 pp), `accountancy_2.pdf` (~296 pp). Git-ignored | Phase 2 | ✅ |
 | KSEAB 2nd PUC Accountancy blueprint / model papers / marking scheme | Phase 3 | ⬜ |
 
@@ -156,3 +156,5 @@ Checklists are expanded from architecture §7 when the phase starts.
 - 2026-11-09: **Teacher buys own credits** from Admin with a UTR (web: *My own credits* card → *Buy credits*; phone: Me → *I have paid*). The API already supported it; the web entry point is now visible and the E2E covers teacher pays → Admin confirms → ₹200 on the teacher's own wallet.
 - 2026-11-09: **Test-data cleanup**: `apps/worker/scripts/cleanup-test-data.mjs` (`pnpm cleanup-test:local`, LOCAL only) removes `@example.com` accounts and "Credit E2E College / E2E PU College / Smoke College <n>" institutions with all their classes, wallets, payments, allotments, ledger, usage and requests, then recomputes the platform wallet from its ledger. Runs automatically as Playwright `globalTeardown`. Run once on the user's local DB: only Shaheen PU College and the user's 4 accounts remain; every wallet balance equals its ledger sum.
 - Next: user re-tests on LOCAL (local.md §3b, updated), then commit + staging + sign-off.
+- 2026-11-09: **Change of class teacher** (user request, decision 9.3-4, architecture §6.6): Admin/POC can reassign a class (web: *Change* → *Reassign* on the institution page). In one batch: the class wallet's unused balance returns to the institution (locked allotment class → institution, visible in both histories), the old teacher's teacher-enrolment ends, their pending requests for the class are cancelled. Students' and the teacher's own credits are untouched. `returnToParent` in `src/credits/ledger.ts`. Tests: worker 41 (new reassignment test incl. ledger invariant), E2E credits flow ends with a reassignment (₹33 returned). Not yet committed/deployed: commit + `pnpm deploy:staging` again before the staging walkthrough.
+- 2026-11-09: User approved the local tests. Phase 1 committed (`c3a51f9`) and pushed; staging secret `OPENROUTER_API_KEY` set (piped from `.dev.vars`, never printed). staging.md got a Phase 1 section (§3a) and the reasoning for keeping E2E local-only (§3b). Next: user runs `pnpm deploy:staging` (migration 0001), walks through §3a step 4, signs off.

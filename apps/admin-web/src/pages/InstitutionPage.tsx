@@ -1,3 +1,4 @@
+import { formatInr } from '@aicoach/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -64,13 +65,25 @@ export function InstitutionPage() {
     },
   });
   const [teacherEmail, setTeacherEmail] = useState<Record<string, string>>({});
+  const [changing, setChanging] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const assign = useMutation({
     mutationFn: (classId: string) =>
-      api(`/institutions/${institutionId}/classes/${classId}/teacher`, {
+      api<{ returnedMicro: number }>(`/institutions/${institutionId}/classes/${classId}/teacher`, {
         method: 'PUT',
         body: { email: teacherEmail[classId] ?? '' },
       }),
-    onSuccess: refresh,
+    onSuccess: (r, classId) => {
+      const cls = classes.data?.find((c) => c.id === classId);
+      setNotice(
+        cls?.classTeacher
+          ? `Class teacher of ${cls.name} changed.${r.returnedMicro > 0 ? ` ${formatInr(r.returnedMicro)} of unused class credits returned to the institution.` : ''}`
+          : null,
+      );
+      setChanging(null);
+      setTeacherEmail({ ...teacherEmail, [classId]: '' });
+      refresh();
+    },
   });
 
   return (
@@ -105,37 +118,68 @@ export function InstitutionPage() {
                 </Td>
                 <Td>{c.studentCount}</Td>
                 <Td>
-                  {c.classTeacher ? (
-                    <span>
-                      {c.classTeacher.name}
-                      <div className="text-xs text-muted">{c.classTeacher.email}</div>
-                    </span>
+                  {c.classTeacher && changing !== c.id ? (
+                    <div className="flex items-start justify-between gap-2">
+                      <span>
+                        {c.classTeacher.name}
+                        <div className="text-xs text-muted">{c.classTeacher.email}</div>
+                      </span>
+                      <Button
+                        variant="secondary"
+                        className="min-h-9 px-3 text-sm"
+                        onClick={() => {
+                          setChanging(c.id);
+                          setNotice(null);
+                        }}
+                        aria-label={`Change class teacher of ${c.name}`}
+                      >
+                        Change
+                      </Button>
+                    </div>
                   ) : (
                     <form
-                      className="flex gap-2"
+                      className="flex flex-col gap-2"
                       onSubmit={(e) => {
                         e.preventDefault();
                         assign.mutate(c.id);
                       }}
                     >
-                      <Input
-                        type="email"
-                        required
-                        placeholder="teacher@email"
-                        className="min-h-9 w-44"
-                        value={teacherEmail[c.id] ?? ''}
-                        onChange={(e) =>
-                          setTeacherEmail({ ...teacherEmail, [c.id]: e.target.value })
-                        }
-                        aria-label={`Class teacher email for ${c.name}`}
-                      />
-                      <Button
-                        type="submit"
-                        className="min-h-9 px-3 text-sm"
-                        disabled={assign.isPending}
-                      >
-                        Assign
-                      </Button>
+                      <div className="flex gap-2">
+                        <Input
+                          type="email"
+                          required
+                          placeholder="teacher@email"
+                          className="min-h-9 w-44"
+                          value={teacherEmail[c.id] ?? ''}
+                          onChange={(e) =>
+                            setTeacherEmail({ ...teacherEmail, [c.id]: e.target.value })
+                          }
+                          aria-label={`Class teacher email for ${c.name}`}
+                        />
+                        <Button
+                          type="submit"
+                          className="min-h-9 px-3 text-sm"
+                          disabled={assign.isPending}
+                        >
+                          {c.classTeacher ? 'Reassign' : 'Assign'}
+                        </Button>
+                        {c.classTeacher && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="min-h-9 px-3 text-sm"
+                            onClick={() => setChanging(null)}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                      {c.classTeacher && (
+                        <p className="max-w-xs text-xs text-muted">
+                          The class's unused credits go back to the institution. Credits already
+                          given to students, and the current teacher's own credits, stay with them.
+                        </p>
+                      )}
                     </form>
                   )}
                 </Td>
@@ -151,6 +195,11 @@ export function InstitutionPage() {
                   : null
             }
           />
+          {notice && (
+            <p role="status" className="mt-3 text-accent">
+              {notice}
+            </p>
+          )}
           <p className="mt-3 text-sm text-muted">
             Students join a class in the mobile app with its join code.
           </p>

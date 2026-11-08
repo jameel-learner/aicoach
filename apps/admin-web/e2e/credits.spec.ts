@@ -12,6 +12,7 @@ const run = Date.now();
 const admin = `e2e.cadmin.${run}@example.com`;
 const poc = `e2e.cpoc.${run}@example.com`;
 const teacher = `e2e.cteacher.${run}@example.com`;
+const teacher2 = `e2e.cteacher2.${run}@example.com`;
 const workerDir = path.resolve(import.meta.dirname, '../../worker');
 const instName = `Credit E2E College ${run}`;
 
@@ -61,7 +62,7 @@ test('credits flow through the UI', async ({ page }) => {
   const health = (await (await page.request.get('/api/health')).json()) as { env: string };
   expect(health.env, 'E2E tests create test colleges and credits: LOCAL only').toBe('development');
 
-  for (const e of [admin, poc, teacher]) await apiSignUp(page, e);
+  for (const e of [admin, poc, teacher, teacher2]) await apiSignUp(page, e);
   execFileSync(process.execPath, ['scripts/make-admin.mjs', '--local', admin], {
     cwd: workerDir,
     stdio: 'ignore',
@@ -209,4 +210,16 @@ test('credits flow through the UI', async ({ page }) => {
   await signIn(page, teacher);
   await page.getByRole('link', { name: 'Credits', exact: true }).click();
   await expect(page.getByRole('link', { name: /Buy credits/ })).toContainText('₹200.00');
+
+  // --- POC changes the class teacher: the class's unused ₹33 returns to the institution
+  await signOut(page);
+  await signIn(page, poc);
+  await page.getByRole('link', { name: instName }).first().click();
+  await page.getByRole('button', { name: 'Change class teacher of Credits Class' }).click();
+  await page.getByLabel('Class teacher email for Credits Class').fill(teacher2);
+  await page.getByRole('button', { name: 'Reassign' }).click();
+  await expect(page.getByRole('status')).toContainText(
+    '₹33.00 of unused class credits returned to the institution',
+  );
+  await expect(page.getByText(teacher2).first()).toBeVisible();
 });

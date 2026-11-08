@@ -191,6 +191,74 @@ export async function allotCredits(
   return allotmentId;
 }
 
+/**
+ * Return a wallet's unused balance (balance − in-flight holds) to its parent, e.g. a class wallet
+ * back to the institution when the class teacher changes (decision 9.3-4). Recorded as a locked,
+ * acknowledged allotment child → parent so both sides see it in their history. `extra` statements
+ * commit in the same batch. Returns the amount moved (0 if nothing was left).
+ */
+export async function returnToParent(
+  db: Db,
+  actor: SessionUser,
+  child: Wallet,
+  note: string,
+  extra: unknown[] = [],
+): Promise<number> {
+  if (!child.parentWalletId) throw badRequest('This wallet has no parent');
+  const fresh = await getWallet(db, child.id);
+  const amountMicro = Math.max(0, fresh.balanceMicro - fresh.heldMicro);
+  const stmts: unknown[] = [...extra];
+  if (amountMicro > 0) {
+    const allotmentId = crypto.randomUUID();
+    const now = new Date();
+    stmts.push(
+      db.insert(allotments).values({
+        id: allotmentId,
+        fromWalletId: child.id,
+        toWalletId: child.parentWalletId,
+        amountMicro,
+        status: 'locked',
+        note,
+        createdBy: actor.id,
+        acknowledgedAt: now,
+        acknowledgedBy: actor.id,
+        lockedAt: now,
+        lockedBy: actor.id,
+      }),
+      addToBalance(db, child.id, -amountMicro),
+      addToBalance(db, child.parentWalletId, amountMicro),
+      db.insert(ledgerEntries).values([
+        {
+          walletId: child.id,
+          type: 'allot_out',
+          amountMicro: -amountMicro,
+          allotmentId,
+          memo: note,
+          createdBy: actor.id,
+        },
+        {
+          walletId: child.parentWalletId,
+          type: 'allot_in',
+          amountMicro,
+          allotmentId,
+          memo: note,
+          createdBy: actor.id,
+        },
+      ]),
+    );
+  }
+  if (stmts.length) {
+    await runBatch(
+      db,
+      stmts as unknown as BatchStatements,
+      'Credits are being used right now. Try again in a minute',
+    );
+  }
+  if (amountMicro > 0)
+    await audit(db, actor.id, 'return_to_parent', 'wallet', child.id, { amountMicro, note });
+  return amountMicro;
+}
+
 async function loadAllotment(db: Db, id: string) {
   const a = await db.select().from(allotments).where(eq(allotments.id, id)).get();
   if (!a) throw notFound('Allotment');

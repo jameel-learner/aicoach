@@ -137,8 +137,9 @@ Do this after the 10 steps above (same accounts). **AI calls are real and cost r
 9. **Phone (student) → Me → My credits:** balance in ₹, **Confirm received** for the teacher's allotment, then **Request credits** (amount + send). On the web, the **teacher's Credits page** shows *Credit requests waiting for you* → **Accept** (optionally a different amount) or **Reject** with a comment. The phone shows the reply and comment (pull to refresh / reopen Me).
 10. **Teacher asks the POC:** teacher → class wallet → *Need more credits?* → amount → **Request credits**. POC → Credits → **Accept** / **Reject**.
     **Teacher buys for themself:** teacher → Credits → the *My own credits* card → **Buy credits** → amount paid, UTR → **Submit payment** (on the phone: Me → My credits → *I have paid: add credits*). Admin confirms it under *Payments to verify*; the teacher's own balance goes up.
-11. **POC → Credits → institution:** *Your downline* shows the class's usage. The POC can open the class wallet but not the student's (immediate downline only).
-12. **Admin → AI models:** switch *Admin/Teacher playground* to `openai/gpt-4o-mini`. Within ~30 seconds the playground answers from that model (shown in the answer). Switch it back.
+11. **Change the class teacher** (POC or Admin → the institution page → **Change** next to the class teacher → another teacher's email → **Reassign**). The page says how much unused class credit went back to the institution. Check: the institution's Credits page shows the return (locked), the old teacher no longer sees the class or its wallet, their **own** credits and the students' credits are unchanged, and the new teacher sees the class wallet at ₹0. Reassign back if you like.
+12. **POC → Credits → institution:** *Your downline* shows the class's usage. The POC can open the class wallet but not the student's (immediate downline only).
+13. **Admin → AI models:** switch *Admin/Teacher playground* to `openai/gpt-4o-mini`. Within ~30 seconds the playground answers from that model (shown in the answer). Switch it back.
 
 ## 4. After pulling new code
 

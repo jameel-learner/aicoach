@@ -2,6 +2,7 @@ import { assignClassTeacherSchema, createClassGroupSchema, generateJoinCode } fr
 import {
   boards,
   classGroups,
+  creditRequests,
   enrolments,
   institutions,
   levels,
@@ -12,6 +13,8 @@ import {
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { AppBindings } from '../env';
+import { returnToParent } from '../credits/ledger';
+import { classWallet } from '../credits/wallets';
 import { assertInstitutionManager } from '../lib/access';
 import { audit } from '../lib/audit';
 import { badRequest, isUniqueViolation, notFound, parseBody } from '../lib/http';
@@ -95,27 +98,35 @@ institutionRoutes.post('/:institutionId/classes', async (c) => {
   throw new Error('Could not generate a unique join code');
 });
 
-/** Assign the class teacher by email. The teacher is also enrolled in the class as a teacher. */
+/**
+ * Assign or change the class teacher by email (Admin or POC). The teacher is enrolled in the class
+ * as a teacher. On a change (decision 9.3-4): the class wallet's unused balance returns to the
+ * institution, the previous teacher's enrolment ends and their pending requests for the class are
+ * cancelled. Students' credits and the teacher's own (direct) credits are untouched.
+ */
 institutionRoutes.put('/:institutionId/classes/:classId/teacher', async (c) => {
   const { institutionId, classId } = c.req.param();
-  await assertInstitutionManager(c.var.db, c.var.user, institutionId);
+  const { db, user: me } = c.var;
+  await assertInstitutionManager(db, me, institutionId);
   const { email } = await parseBody(c, assignClassTeacherSchema);
-  const cls = await c.var.db
+  const cls = await db
     .select()
     .from(classGroups)
     .where(and(eq(classGroups.id, classId), eq(classGroups.institutionId, institutionId)))
     .get();
   if (!cls) throw notFound('Class');
-  const teacher = await c.var.db.select().from(user).where(eq(user.email, email)).get();
+  const teacher = await db.select().from(user).where(eq(user.email, email)).get();
   if (!teacher) throw notFound('User with this email (ask them to sign up as a teacher first)');
   if (teacher.role !== 'teacher') throw badRequest('Only a teacher account can be a class teacher');
+  if (cls.classTeacherId === teacher.id) return c.json({ ok: true, returnedMicro: 0 });
 
-  await c.var.db.batch([
-    c.var.db
+  const previousId = cls.classTeacherId;
+  const stmts: unknown[] = [
+    db
       .update(classGroups)
       .set({ classTeacherId: teacher.id })
-      .where(eq(classGroups.id, classId)),
-    c.var.db
+      .where(and(eq(classGroups.id, classId), sql`${classGroups.classTeacherId} IS ${previousId}`)),
+    db
       .insert(enrolments)
       .values({
         userId: teacher.id,
@@ -124,12 +135,58 @@ institutionRoutes.put('/:institutionId/classes/:classId/teacher', async (c) => {
         institutionId,
         classGroupId: classId,
       })
-      .onConflictDoNothing(),
-  ]);
-  await audit(c.var.db, c.var.user.id, 'assign_class_teacher', 'class_group', classId, {
-    teacherId: teacher.id,
-  });
-  return c.json({ ok: true });
+      .onConflictDoUpdate({
+        target: [enrolments.userId, enrolments.offeringId, enrolments.classGroupId],
+        set: { status: 'active', roleIn: 'teacher' },
+      }),
+  ];
+  let returnedMicro = 0;
+  if (previousId) {
+    const classW = await classWallet(db, classId);
+    stmts.push(
+      db
+        .update(enrolments)
+        .set({ status: 'removed' })
+        .where(
+          and(
+            eq(enrolments.userId, previousId),
+            eq(enrolments.classGroupId, classId),
+            eq(enrolments.roleIn, 'teacher'),
+          ),
+        ),
+      db
+        .update(creditRequests)
+        .set({
+          status: 'cancelled',
+          decidedBy: me.id,
+          decidedAt: new Date(),
+          decisionNote: 'Class teacher changed',
+        })
+        .where(and(eq(creditRequests.walletId, classW.id), eq(creditRequests.status, 'pending'))),
+    );
+    returnedMicro = await returnToParent(
+      db,
+      me,
+      classW,
+      'Returned to the institution: class teacher changed',
+      stmts,
+    );
+  } else {
+    await db.batch(stmts as unknown as Parameters<typeof db.batch>[0]);
+  }
+  await audit(
+    db,
+    me.id,
+    previousId ? 'change_class_teacher' : 'assign_class_teacher',
+    'class_group',
+    classId,
+    {
+      teacherId: teacher.id,
+      previousTeacherId: previousId,
+      returnedMicro,
+    },
+  );
+  return c.json({ ok: true, returnedMicro });
 });
 
 /** Teachers of this institution (immediate downline view for the POC). */

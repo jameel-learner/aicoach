@@ -557,6 +557,7 @@ flowchart TB
   - There is no other take-back path.
   - Edits never rewrite history. Each edit is a new pair of ledger entries linked to the original allotment, and the UI shows the full edit trail (who, when, old → new amount).
   - Admin issuances are linked to the offline payment record they came from.
+- **Change of class teacher (decision 9.3-4):** Admin or the institution POC can reassign a class to another teacher at any time. The class wallet belongs to the **class**, not the teacher, so it stays; on a change, its **unused balance (balance − in-flight holds) returns to the institution wallet** in the same batch, recorded as a locked allotment class → institution ("Returned: class teacher changed") so both sides see it. The previous teacher's teacher-enrolment in that class ends, and their pending credit requests for the class are cancelled. Students' wallets (credits already given to students) and the teacher's **own direct wallet** are untouched. The new teacher starts from ₹0 and the POC allots afresh.
 - **Teacher usage:** a teacher's own LLM usage in a class context is charged to that **class wallet**. Outside a class context, or for directly funded teachers, it goes to their direct wallet.
 - **Student spend order:** wallet of the enrolment being used → the student's direct wallet (if any). At zero balance, LLM-backed actions are blocked with a **"Request credits"** button (see *Credit requests* below). **Pre-generated content (notes, cards, cached answers) stays free to read**, so learning never fully stops. This follows from the honest-design rule (5.5.4).
 
@@ -837,3 +838,4 @@ With one developer (you + Claude), phases run **in order, 0 → 9**. Each phase 
 | 1 | Credit requests | Requests go one level up and are **accepted (auto-allotment) or rejected with a comment** shown to the requester. Requests to **Admin must carry the payment UTR**; they create a pending payment that Admin verifies, and confirming issues the credits automatically |
 | 2 | Currency shown | **Everything in INR** (1 credit = ₹1; replaces 9.2-2's US$1). Only the OpenRouter float is shown in US$ (with INR equivalent). Usage converted at an Admin-set USD→INR rate stored per call |
 | 3 | Fee visibility | The platform fee % (and exchange rate) is **Admin-only**. No user-facing text mentions the fee or the dollar value of a credit |
+| 4 | Change of class teacher | Admin/POC can reassign a class. The class's unused balance **returns to the institution**; the teacher's own (direct) credits and students' credits stay where they are |

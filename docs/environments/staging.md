@@ -100,7 +100,7 @@ pnpm deploy:staging
 
 Answer **y** when it asks to apply the migration. Your Phase 0 staging accounts, institution and classes are kept; the new credit tables start empty.
 
-**4. Test.** Keep `pnpm logs:staging` running in Terminal 1 (sign-in codes **and** the credit emails, such as requests, decisions and "credits received", appear there). Then follow the **12 steps of the [local Credits & AI walkthrough](local.md#3b-credits--ai-walkthrough-phase-1)** on https://aicoach-api-staging.jameel-outskill.workers.dev, with these differences:
+**4. Test.** Keep `pnpm logs:staging` running in Terminal 1 (sign-in codes **and** the credit emails, such as requests, decisions and "credits received", appear there). Then follow the **13 steps of the [local Credits & AI walkthrough](local.md#3b-credits--ai-walkthrough-phase-1)** on https://aicoach-api-staging.jameel-outskill.workers.dev, with these differences:
 
 | Local walkthrough says | On staging |
 |---|---|
@@ -144,7 +144,7 @@ pnpm exec wrangler secret list --env staging   # see which exist (values are nev
 |---|---|---|
 | `BETTER_AUTH_SECRET` | ✅ set (random, different from local) | Phase 0 |
 | `TURNSTILE_SECRET_KEY` | ✅ set (Cloudflare **test** key) | Phase 0 |
-| `OPENROUTER_API_KEY` | ⬜ set at the end of Phase 1 ([§3a](#3a-phase-1-on-staging-credits--ai) step 2) | Phase 1 |
+| `OPENROUTER_API_KEY` | ✅ set 2026-11-09 (same key as local, per user) | Phase 1 |
 | `RESEND_API_KEY` | ⬜ when a sender domain exists | Pilot |
 
 Non-secret settings are under `env.staging.vars` in `apps\worker\wrangler.jsonc` (e.g. `EMAIL_PROVIDER` is `console`). They take effect on the next deploy.
