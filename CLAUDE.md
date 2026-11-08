@@ -26,13 +26,15 @@ Board-exam-aligned AI tutor for Indian students and teachers. Mobile app (studen
   - Every phase section in progress.md lists the staging secrets/steps it will need at phase end.
 - **One phase at a time** (§7 of the architecture doc). A phase is done only when its *Test & exit criteria* pass **and the user signs off** after a demo. Don't start the next phase without that sign-off.
 - **Commit only when the user asks** (or when the user has approved a commit-per-phase routine). Never commit secrets.
+- **Worker entry module** (`apps/worker/src/index.ts`) may only export handlers/functions; workerd refuses to start otherwise (test: `test/entry.test.ts`).
+- **D1 limit:** at most 100 bound parameters per query. Don't build huge `IN (...)` lists.
 - Keep architecture.md the source of truth. If implementation forces a design change, update the doc in the same change.
 - Prefer small, tested, vertical increments over large untested drops.
 
 ## Non-negotiable engineering invariants
 
-- **Money:** store amounts as **integer micro-USD**, never floats. `1 credit = US$1`. Billed = OpenRouter actual cost × (1 + fee_pct), fee_pct default 10%, stored per ledger entry. Ledger is **append-only**. Edits are new entries. Allotment lifecycle: allot → (giver may edit while open; an edit clears the acknowledgement) → receiver acknowledges → giver locks → immutable.
-- **LLM calls:** always go through `packages/llm` (router → AI Gateway → OpenRouter), and always go through the **metering** hold → settle path. Ask for a **task** (`tutor_chat`, `grading`, …), never hard-code a model slug. The model comes from the admin-managed `model_registry` (default `google/gemini-2.5-flash`). A cache hit is charged 0.
+- **Money:** wallet amounts are **integer micro-INR** (`packages/core/src/money.ts`), never floats. `1 credit = ₹1 = 1e6 micro`. Provider cost is integer nano-USD, converted at the Admin-set USD→INR rate (stored per usage row). Users only ever see ₹; the fee %, rate and USD cost are Admin-only. The wallets table has `CHECK(balance >= held >= 0)`; move money only in D1 batches via `src/credits/ledger.ts` / `meter.ts`. Billed = OpenRouter actual cost (USD) × rate × (1 + fee_pct), fee_pct default 10%, stored per usage row. Ledger is **append-only**. Edits are new entries. Allotment lifecycle: allot → (giver may edit while open; an edit clears the acknowledgement) → receiver acknowledges → giver locks → immutable.
+- **LLM calls:** always go through `runMeteredChat` in `apps/worker/src/llm/run.ts` (registry → optional AI Gateway → OpenRouter), which does the **metering** hold → settle path. Ask for a **task** (`tutor_chat`, `grading`, …), never hard-code a model slug. The model comes from the admin-managed `model_registry` (default `google/gemini-2.5-flash`). A cache hit is charged 0.
 - **Grounding:** learner-facing factual answers carry textbook citations, or an explicit "not in your textbook"/uncertainty flag.
 - **Authorisation:** enforced in the API. Tenant (institution) scoping on every query. Usage visibility = own node + immediate downline, except Admin, who sees the full tree.
 - **Engagement policy:** no loss framing, fake urgency, public leaderboards or variable rewards. Notifications respect caps and quiet hours (architecture §6.1).
@@ -82,7 +84,8 @@ pm` via Corepack (`corepack enable pnpm --install-directory "$APPDATA/npm"`).
 | Make a user Admin | `pnpm make-admin:local <email>` / `pnpm make-admin:staging <email>` |
 | Typecheck all | `pnpm typecheck` |
 | Tests (Workers runtime + local D1) | `pnpm test` |
-| Web E2E (needs `dev:worker` running or starts it) | `pnpm --filter @aicoach/admin-web test:e2e` |
+| Web E2E (needs `dev:worker` running or starts it; LOCAL only, cleans up its test data afterwards) | `pnpm --filter @aicoach/admin-web test:e2e` |
+| Remove leftover test data from the local DB | `pnpm cleanup-test:local` |
 | Format | `pnpm format` / `pnpm format:check` |
 | New DB migration | edit `packages/db/src/schema.ts`, then `pnpm db:generate` and `pnpm db:migrate:local` |
 | Mobile bundle check | `cd apps/mobile && npx expo export --platform android --output-dir <tmp>` |

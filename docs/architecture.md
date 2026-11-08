@@ -18,7 +18,7 @@ Main decisions:
 1. **AI approach: Agentic RAG built on explicit, deterministic state graphs.** This is a hybrid. One shared, grounded retrieval layer (hybrid search, reranking and mandatory citations) serves every journey. Each journey (practice, explanation, test paper and so on) is an **explicit state machine**, where LLM calls are nodes and the code controls the transitions. The LLM gets limited autonomy in a few places only: deciding to retrieve again, picking hint depth, and self-verifying citations. There is **no free-form multi-agent swarm**. We use the *LangGraph pattern* (graph, checkpoints, interrupts, resume) but **implement it with Cloudflare-native primitives**: Agents SDK on Durable Objects for interactive sessions, and Workflows for long pipelines. We don't adopt the LangGraph library. Section 4 gives the reasoning.
 2. **Platform: Cloudflare-first.** Workers, Durable Objects, Workflows, D1, R2, Vectorize, KV, Workers AI, AI Gateway, Queues and Cron Triggers. External services are added only where Cloudflare has no good equivalent: LLMs, push delivery and email.
 3. **All LLM calls go through one OpenRouter account.** This covers chat, generation, grading, vision, PDF OCR and speech. The **model is chosen per task by the Admin** at runtime. The default is `google/gemini-2.5-flash`; the alternatives are Claude Sonnet 5.5, Claude Haiku 5.5 and `openai/gpt-4o-mini` (§6.5).
-4. **Prepaid credit system.** Credits are bought offline. Admin issues them, and they flow **Admin → Institution → Class (teacher) → Student**, or directly to a teacher or student. Every LLM call is charged at **OpenRouter's actual cost + a 10% platform fee**. Each role sees its own usage and its immediate downline; Admin sees the full tree (§6.6).
+4. **Prepaid credit system.** Credits are bought offline. Admin issues them, and they flow **Admin → Institution → Class (teacher) → Student**, or directly to a teacher or student. Balances are in **rupees**. Every LLM call is charged at **OpenRouter's actual cost, converted to INR, + a platform fee** (10% by default; the fee is visible only to Admin). Each role sees its own usage and its immediate downline; Admin sees the full tree (§6.6).
 5. **Clients:** an **Expo (React Native)** mobile app for students and teachers, and a **React + Vite** web app with **Admin, Institution POC and Teacher areas**, served from Workers static assets.
 6. **Cost strategy:** *Generate once, serve many.* The expensive content (notes per marks weightage, memory maps, question banks) is generated **at ingest time** and stored. Interactive questions first go through a **semantic answer cache** (spec 1.3), which the user can bypass with "force new answer" (spec 1.4). This keeps LLM spend and free-tier usage under control.
 7. **Delivery:** **10 phases (0–9)**, each producing a working, testable vertical slice. Credits and metering come in Phase 1, before any learner-facing LLM feature. The attention/engagement design (spec 5, flagged as the top priority) is **built into every phase** as a set of design rules. It is not a late add-on.
@@ -558,7 +558,23 @@ flowchart TB
   - Edits never rewrite history. Each edit is a new pair of ledger entries linked to the original allotment, and the UI shows the full edit trail (who, when, old → new amount).
   - Admin issuances are linked to the offline payment record they came from.
 - **Teacher usage:** a teacher's own LLM usage in a class context is charged to that **class wallet**. Outside a class context, or for directly funded teachers, it goes to their direct wallet.
-- **Student spend order:** wallet of the enrolment being used → the student's direct wallet (if any). At zero balance, LLM-backed actions are blocked with a **"Request credits"** button that notifies the upline. **Pre-generated content (notes, cards, cached answers) stays free to read**, so learning never fully stops. This follows from the honest-design rule (5.5.4).
+- **Student spend order:** wallet of the enrolment being used → the student's direct wallet (if any). At zero balance, LLM-backed actions are blocked with a **"Request credits"** button (see *Credit requests* below). **Pre-generated content (notes, cards, cached answers) stays free to read**, so learning never fully stops. This follows from the honest-design rule (5.5.4).
+
+**Credit requests (decision 9.3-1)**
+
+Anyone who receives credits can ask for more from the wallet's parent. Where the request goes depends on the wallet:
+
+| Requester's wallet | Goes to | What the requester sends |
+|---|---|---|
+| Student in a class | Class teacher (manages the class wallet) | Amount + optional message |
+| Class wallet (teacher) | Institution POC | Amount + optional message |
+| Institution wallet (POC), or a direct teacher/student wallet | **Admin** | Amount paid + **payment UTR/reference (mandatory)**, method, date |
+
+- A request to Admin **creates a pending payment record** (`payments.status = pending`, `submitted_by` = requester). Admin checks the UTR against the bank statement and either **confirms** (payment → `verified`, credits issued automatically in the same flow; Admin may change the amount, e.g. a short payment) or **rejects** it with a comment (payment → `rejected`). The same UTR can't be submitted twice while an earlier one is pending or verified.
+- A request to a teacher/POC is **accepted** (an allotment from the parent wallet is made automatically; the giver may change the amount) or **rejected** with a comment.
+- Statuses: `pending → approved | rejected` (or `cancelled` by the requester while pending). The decision comment and granted amount are shown back to the requester; both sides get an email.
+- Approved requests create normal allotments, so the **allot → acknowledge → lock** lifecycle still applies.
+- The giver sees open requests on their web Credits page (Admin: *Payments to verify* on Credits & payments).
 
 **What gets charged**
 
@@ -570,15 +586,23 @@ flowchart TB
 | Cache hits (semantic or gateway) | **Nothing.** OpenRouter charged nothing |
 | Embeddings, reranker, safety classifier (Workers AI) | Not metered (covered by the platform fee) |
 
-**Pricing rule (6.4).** `billed = openrouter_actual_cost × (1 + fee_pct)`, with `fee_pct = 10%` by default. The admin can change it, and **each ledger entry stores the fee % in force at the time**, for audit. Amounts are stored as **integer micro-USD** (no floating point). **`1 credit = US$1` (decision 9.2-2).** An institution that pays US$100 gets 100 credits. When OpenRouter charges $10 for its calls, 11 credits are deducted. Balances are shown to 4 decimals, since a single chat turn often costs well under 0.01 credit. The user-visible balance is always net of the fee; the raw cost and the fee are visible only to Admin.
+**Pricing rule (6.4, revised 9.3-2).** Wallets are in **INR**: 1 credit = ₹1, and a payment of ₹8,350 gives ₹8,350 of credits. OpenRouter bills in USD, so each call is converted at the Admin-set **USD→INR rate** (platform setting, default ₹88.00/US$):
 
-**Platform float.** The platform's own OpenRouter balance (e.g. the US$182 top-up) is separate from the credits issued to users. The Admin dashboard shows the **live OpenRouter account balance** (from OpenRouter's credits API) next to **outstanding user credits ÷ 1.10** (what those credits will cost at OpenRouter) plus platform-wallet spend. It **warns when the OpenRouter balance can't cover outstanding credits**, so the Admin tops up before calls start failing.
+`billed_inr = openrouter_actual_cost_usd × usd_inr_rate × (1 + fee_pct)`, with `fee_pct = 10%` by default.
+
+- Storage: wallet money is **integer micro-INR** (₹1 = 1,000,000 µ₹; no floating point). A one-word answer costs about ₹0.0004 = 400 µ₹, so rounding error is under 0.2% even on the smallest calls, and safe-integer range covers ~₹900 crore per value. The provider cost is kept separately as **integer nano-USD** per usage row, and OpenRouter prices as integer pico-USD per token.
+- Each usage row stores the **fee % and the USD→INR rate in force at the time**, for audit.
+- Balances are shown in rupees, to 2 decimals for balances and up to 4 for single calls.
+- **The fee and the exchange rate are never shown to non-Admins.** Users only see rupee amounts net of the fee; the UI never says "1 credit = $1" or "+10%". Raw USD cost, fee %, exchange rate and model are Admin-only.
+- The exchange rate doubles as an FX buffer: Admin sets it at or slightly above the market rate, and changes apply to new calls only (balances don't move when it changes).
+
+**Platform float.** The platform's own OpenRouter balance (e.g. the US$182 top-up) is separate from the credits issued to users. The Admin dashboard shows the **live OpenRouter account balance in US$ (with its INR equivalent)** next to what outstanding balances would cost at OpenRouter: **user balances ÷ rate ÷ (1 + fee)** plus the platform wallet ÷ rate. It **warns when the OpenRouter balance can't cover outstanding credits**, so the Admin tops up before calls start failing.
 
 **Onboarding fee (decision 9.2-4).** Textbook ingestion is paid from the platform wallet. To recover that cost, Admin records a **one-time onboarding fee** per institution as a separate offline payment (type `onboarding_fee`, which gives no credits). If the institution's textbook is already on the platform, there's no ingestion cost and the fee is margin. The Admin dashboard shows ingestion spend vs onboarding fees collected.
 
 **Hold → call → settle (per LLM call)**
 
-1. Estimate the maximum cost: `(est. input tokens × input price + max_tokens × output price) × 1.10`, using registry prices.
+1. Estimate the maximum cost: `(est. input tokens × input price + max_tokens × output price) × rate × (1 + fee)`, using registry prices.
 2. **Hold:** in D1, `UPDATE wallets SET held = held + :est WHERE id = :w AND balance - held >= :est`. Zero rows changed → insufficient credits, no call is made. The conditional update is atomic in SQLite, so concurrent requests can't overspend.
 3. Call OpenRouter (streaming). Read `usage.cost` from the final chunk/response, plus the generation ID.
 4. **Settle:** in one D1 batch, release the hold, debit `billed`, write `ledger_entries` + `llm_usage` (wallet, user, institution, class, task, model actually used, tokens, raw cost, fee %, billed, generation ID, cache status). Idempotent on generation ID.
@@ -801,7 +825,15 @@ With one developer (you + Claude), phases run **in order, 0 → 9**. Each phase 
 | # | Question | Decision |
 |---|---|---|
 | 1 | Syllabus/textbook match | Each institution's textbook is set **once by Admin at onboarding**: select an existing platform book or upload a new one (`institution_books`) |
-| 2 | Credit value | **1 credit = US$1.** Credits issued = amount paid. Usage deducts OpenRouter cost × 1.10 |
+| 2 | Credit value | ~~1 credit = US$1~~ → **superseded by 9.3-2: 1 credit = ₹1.** Credits issued = amount paid. Usage deducts OpenRouter cost × rate × 1.10 |
 | 3 | Take-back of allotments | **Allot → receiver spends → receiver acknowledges → giver locks.** The giver may edit the amount only while it's open (an edit clears the acknowledgement). Once locked, no edits or reversal |
 | 4 | Platform-funded content | Charged to the platform wallet. Recovered via a **one-time institution onboarding fee** |
 | 5 | Parent alert channel | **Email** for now, behind a channel interface ready for WhatsApp/SMS |
+
+### 9.3 Follow-up decisions (2026-11-08, Phase 1 review)
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Credit requests | Requests go one level up and are **accepted (auto-allotment) or rejected with a comment** shown to the requester. Requests to **Admin must carry the payment UTR**; they create a pending payment that Admin verifies, and confirming issues the credits automatically |
+| 2 | Currency shown | **Everything in INR** (1 credit = ₹1; replaces 9.2-2's US$1). Only the OpenRouter float is shown in US$ (with INR equivalent). Usage converted at an Admin-set USD→INR rate stored per call |
+| 3 | Fee visibility | The platform fee % (and exchange rate) is **Admin-only**. No user-facing text mentions the fee or the dollar value of a credit |

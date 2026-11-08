@@ -5,9 +5,11 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -310,4 +312,263 @@ export const auditLog = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [index('audit_entity_idx').on(t.entity, t.entityId)],
+);
+
+// =====================================================================
+// Phase 1: LLM models & registry (architecture §6.5)
+// =====================================================================
+
+export const platformSettings = sqliteTable('platform_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedBy: text('updated_by'),
+  updatedAt: updatedAt(),
+});
+
+/** Catalog synced from OpenRouter /models. Prices in pico-USD per token (exact integers). */
+export const llmModels = sqliteTable('llm_models', {
+  id: text('id').primaryKey(), // OpenRouter slug, e.g. google/gemini-2.5-flash
+  name: text('name').notNull(),
+  contextLength: integer('context_length'),
+  pricePromptPico: integer('price_prompt_pico').notNull().default(0),
+  priceCompletionPico: integer('price_completion_pico').notNull().default(0),
+  inputModalities: text('input_modalities', { mode: 'json' }).$type<string[]>().notNull(),
+  supportsJson: integer('supports_json', { mode: 'boolean' }).notNull().default(false),
+  /** Shown as an option in the Admin model picker. */
+  selectable: integer('selectable', { mode: 'boolean' }).notNull().default(false),
+  /** False when the model disappeared from OpenRouter's list at the last sync. */
+  available: integer('available', { mode: 'boolean' }).notNull().default(true),
+  syncedAt: integer('synced_at', { mode: 'timestamp_ms' }),
+});
+
+/** Which model serves each task. Missing rows fall back to the code default. */
+export const modelRegistry = sqliteTable('model_registry', {
+  task: text('task').primaryKey(),
+  primaryModel: text('primary_model').notNull(),
+  fallbackModels: text('fallback_models', { mode: 'json' }).$type<string[]>().notNull(),
+  maxTokens: integer('max_tokens'),
+  temperature: real('temperature'),
+  updatedBy: text('updated_by'),
+  updatedAt: updatedAt(),
+});
+
+// =====================================================================
+// Phase 1: Credits (architecture §6.6). Wallet money is integer micro-INR; 1 credit = ₹1 = 1e6 micro.
+// Provider (OpenRouter) cost is integer nano-USD.
+// =====================================================================
+
+export const wallets = sqliteTable(
+  'wallets',
+  {
+    id: id(),
+    ownerType: text('owner_type', { enum: ['platform', 'institution', 'class', 'user'] }).notNull(),
+    institutionId: text('institution_id').references(() => institutions.id),
+    classGroupId: text('class_group_id').references(() => classGroups.id),
+    userId: text('user_id').references(() => user.id),
+    parentWalletId: text('parent_wallet_id'),
+    /** Materialised path, e.g. /p/i:<inst>/c:<class>/u:<user>. Deterministic, so also the identity. */
+    path: text('path').notNull().unique(),
+    balanceMicro: integer('balance_micro').notNull().default(0),
+    heldMicro: integer('held_micro').notNull().default(0),
+    /** Optional per-day spending cap (set by the giver, e.g. teacher for a student). */
+    dailyCapMicro: integer('daily_cap_micro'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('wallets_parent_idx').on(t.parentWalletId),
+    index('wallets_user_idx').on(t.userId),
+    // The database itself refuses any change that would overspend: available = balance - held >= 0.
+    check('wallet_funds_ok', sql`${t.heldMicro} >= 0 AND ${t.balanceMicro} >= ${t.heldMicro}`),
+  ],
+);
+
+export const payments = sqliteTable(
+  'payments',
+  {
+    id: id(),
+    kind: text('kind', { enum: ['credit_purchase', 'onboarding_fee', 'platform_topup'] }).notNull(),
+    payerType: text('payer_type', { enum: ['institution', 'user', 'platform'] }).notNull(),
+    institutionId: text('institution_id').references(() => institutions.id),
+    userId: text('user_id').references(() => user.id),
+    /** Amount actually paid, in minor units (paise for INR, cents for USD). */
+    amountMinor: integer('amount_minor').notNull(),
+    currency: text('currency', { enum: ['INR', 'USD'] }).notNull(),
+    method: text('method').notNull(),
+    reference: text('reference'),
+    paidOn: text('paid_on').notNull(), // YYYY-MM-DD
+    note: text('note'),
+    /** Who created the record: Admin, or the payer when submitted with a credit request. */
+    recordedBy: text('recorded_by').notNull(),
+    /** Payer-submitted payments start pending until Admin checks the UTR (decision 9.3-1). */
+    status: text('status', { enum: ['pending', 'verified', 'rejected'] })
+      .notNull()
+      .default('verified'),
+    verifiedBy: text('verified_by'),
+    verifiedAt: integer('verified_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('payments_inst_idx').on(t.institutionId),
+    index('payments_reference_idx').on(t.reference),
+    index('payments_status_idx').on(t.status),
+  ],
+);
+
+/**
+ * A transfer of credits down the tree (or an Admin issuance when fromWalletId is null).
+ * Lifecycle: open (giver may edit; an edit clears the acknowledgement) → acknowledged by receiver → locked by giver.
+ */
+export const allotments = sqliteTable(
+  'allotments',
+  {
+    id: id(),
+    fromWalletId: text('from_wallet_id').references(() => wallets.id),
+    toWalletId: text('to_wallet_id')
+      .notNull()
+      .references(() => wallets.id),
+    amountMicro: integer('amount_micro').notNull(),
+    status: text('status', { enum: ['open', 'locked'] })
+      .notNull()
+      .default('open'),
+    paymentId: text('payment_id').references(() => payments.id),
+    note: text('note'),
+    createdBy: text('created_by').notNull(),
+    createdAt: createdAt(),
+    acknowledgedAt: integer('acknowledged_at', { mode: 'timestamp_ms' }),
+    acknowledgedBy: text('acknowledged_by'),
+    lockedAt: integer('locked_at', { mode: 'timestamp_ms' }),
+    lockedBy: text('locked_by'),
+  },
+  (t) => [
+    index('allotments_to_idx').on(t.toWalletId),
+    index('allotments_from_idx').on(t.fromWalletId),
+  ],
+);
+
+export const allotmentEdits = sqliteTable(
+  'allotment_edits',
+  {
+    id: id(),
+    allotmentId: text('allotment_id')
+      .notNull()
+      .references(() => allotments.id),
+    oldAmountMicro: integer('old_amount_micro').notNull(),
+    newAmountMicro: integer('new_amount_micro').notNull(),
+    reason: text('reason'),
+    editedBy: text('edited_by').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('allotment_edits_allotment_idx').on(t.allotmentId)],
+);
+
+/** Append-only. A wallet's balance always equals the sum of its entries. */
+export const ledgerEntries = sqliteTable(
+  'ledger_entries',
+  {
+    id: id(),
+    walletId: text('wallet_id')
+      .notNull()
+      .references(() => wallets.id),
+    type: text('type', {
+      enum: ['issue', 'allot_in', 'allot_out', 'edit_in', 'edit_out', 'usage', 'adjust'],
+    }).notNull(),
+    /** Signed: positive = credits in, negative = credits out. */
+    amountMicro: integer('amount_micro').notNull(),
+    allotmentId: text('allotment_id'),
+    usageId: text('usage_id'),
+    memo: text('memo'),
+    createdBy: text('created_by'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('ledger_wallet_idx').on(t.walletId, t.createdAt)],
+);
+
+export const creditHolds = sqliteTable(
+  'credit_holds',
+  {
+    id: id(),
+    walletId: text('wallet_id')
+      .notNull()
+      .references(() => wallets.id),
+    amountMicro: integer('amount_micro').notNull(),
+    requestId: text('request_id').notNull().unique(),
+    status: text('status', { enum: ['held', 'settled', 'released', 'expired'] })
+      .notNull()
+      .default('held'),
+    createdAt: createdAt(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('holds_status_idx').on(t.status, t.expiresAt)],
+);
+
+/** One row per metered LLM call. */
+export const llmUsage = sqliteTable(
+  'llm_usage',
+  {
+    id: id(),
+    requestId: text('request_id').notNull().unique(),
+    generationId: text('generation_id'),
+    walletId: text('wallet_id')
+      .notNull()
+      .references(() => wallets.id),
+    userId: text('user_id'),
+    task: text('task').notNull(),
+    modelRequested: text('model_requested').notNull(),
+    modelUsed: text('model_used'),
+    promptTokens: integer('prompt_tokens'),
+    completionTokens: integer('completion_tokens'),
+    rawUsdNano: integer('raw_usd_nano').notNull().default(0),
+    feeBps: integer('fee_bps').notNull(),
+    /** USD→INR rate (paise per US$) used to convert this call. */
+    usdInrPaise: integer('usd_inr_paise').notNull(),
+    billedMicro: integer('billed_micro').notNull().default(0),
+    cacheStatus: text('cache_status', { enum: ['miss', 'hit'] })
+      .notNull()
+      .default('miss'),
+    status: text('status', { enum: ['ok', 'error'] }).notNull(),
+    errorMessage: text('error_message'),
+    latencyMs: integer('latency_ms'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('usage_wallet_idx').on(t.walletId, t.createdAt),
+    index('usage_generation_idx').on(t.generationId),
+  ],
+);
+
+/**
+ * A request for credits from the level above (decision 9.3-1). Requests to Admin carry a
+ * payment (UTR) that Admin verifies; approval issues/allots credits automatically.
+ */
+export const creditRequests = sqliteTable(
+  'credit_requests',
+  {
+    id: id(),
+    /** The requester's wallet (receives the credits). */
+    walletId: text('wallet_id')
+      .notNull()
+      .references(() => wallets.id),
+    /** The wallet the credits come from (its managers decide). Null-parent wallets can't request. */
+    parentWalletId: text('parent_wallet_id')
+      .notNull()
+      .references(() => wallets.id),
+    toAdmin: integer('to_admin', { mode: 'boolean' }).notNull(),
+    requestedBy: text('requested_by').notNull(),
+    amountMicro: integer('amount_micro').notNull(),
+    message: text('message'),
+    paymentId: text('payment_id').references(() => payments.id),
+    status: text('status', { enum: ['pending', 'approved', 'rejected', 'cancelled'] })
+      .notNull()
+      .default('pending'),
+    grantedMicro: integer('granted_micro'),
+    allotmentId: text('allotment_id').references(() => allotments.id),
+    decidedBy: text('decided_by'),
+    decidedAt: integer('decided_at', { mode: 'timestamp_ms' }),
+    decisionNote: text('decision_note'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('credit_requests_wallet_idx').on(t.walletId, t.createdAt),
+    index('credit_requests_parent_idx').on(t.parentWalletId, t.status),
+  ],
 );

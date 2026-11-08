@@ -1,8 +1,12 @@
-import type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactNode,
-  SelectHTMLAttributes,
+import {
+  cloneElement,
+  isValidElement,
+  useId,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+  type SelectHTMLAttributes,
 } from 'react';
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
@@ -37,12 +41,28 @@ export function Field({
   hint?: string;
   children: ReactNode;
 }) {
+  // The label sits next to (not around) the control and is linked by id. Wrapping a <select> in its
+  // <label> makes the accessible name include the selected option ("Paid by Institution").
+  const id = useId();
+  const hintId = hint ? `${id}-hint` : undefined;
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ id?: string; 'aria-describedby'?: string }>, {
+        id: (children.props as { id?: string }).id ?? id,
+        'aria-describedby': hintId,
+      })
+    : children;
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-sm font-medium">{label}</span>
-      {children}
-      {hint && <span className="text-sm text-muted">{hint}</span>}
-    </label>
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      {control}
+      {hint && (
+        <span id={hintId} className="text-sm text-muted">
+          {hint}
+        </span>
+      )}
+    </div>
   );
 }
 

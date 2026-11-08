@@ -10,6 +10,7 @@
     "test": "vitest run",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:seed:local": "wrangler d1 execute DB --local --file=../../packages/db/seed/seed.sql",
+    "db:cleanup-test:local": "node scripts/cleanup-test-data.mjs --local",
     "db:make-admin:local": "node scripts/make-admin.mjs --local",
     "deploy:staging": "wrangler d1 migrations apply DB --remote --env staging && wrangler deploy --env staging",
     "cf-typegen": "wrangler types",

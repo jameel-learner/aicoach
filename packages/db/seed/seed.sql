@@ -1,3 +1,6 @@
+-- Reference data only (applied to LOCAL and STAGING by db:seed:*).
+-- By design this seed contains NO institutions, users, payments, wallets or credits: test data is
+-- created by the tests themselves on LOCAL only. Money in AI Coach is always in rupees (micro-INR).
 -- Pilot taxonomy (decision 1): KSEAB → 2nd PUC → Accountancy. Idempotent.
 INSERT OR IGNORE INTO boards (id, code, name) VALUES
   ('board_kseab', 'KSEAB', 'Karnataka School Examination and Assessment Board');

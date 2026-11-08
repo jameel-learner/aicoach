@@ -2,6 +2,7 @@ import { ROLE_LABELS } from '@aicoach/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
+import { CreditsCard } from '../../components/CreditsCard';
 import { Body, Button, Card, ErrorText, Heading, Screen, Title } from '../../components/ui';
 import { api, errorMessage, useMe } from '../../lib/api';
 import { authClient } from '../../lib/auth-client';
@@ -60,6 +61,8 @@ export default function Me() {
           />
         )}
       </Card>
+
+      {(me.user.role === 'student' || me.user.role === 'teacher') && <CreditsCard />}
 
       {me.parentContact && (
         <Card>

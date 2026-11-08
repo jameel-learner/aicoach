@@ -22,6 +22,9 @@ export default defineConfig(async () => {
             // Never inherit local .dev.vars secrets: captcha is off in tests, emails stay in memory.
             TURNSTILE_SECRET_KEY: '',
             RESEND_API_KEY: '',
+            // Tests mock OpenRouter; never use the real key from .dev.vars.
+            OPENROUTER_API_KEY: 'test-openrouter-key',
+            AI_GATEWAY_URL: '',
           },
         },
       }),

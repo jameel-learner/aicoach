@@ -49,3 +49,75 @@ If you don't know about this, you can ignore this email and no consent will be r
 <p>If you don't know about this, you can ignore this email and no consent will be recorded.</p><p>— AI Coach</p>`,
   };
 }
+
+export function creditsReceivedEmail(opts: {
+  to: string;
+  name: string;
+  /** Formatted rupee amount, e.g. "₹8,350.00". */
+  amount: string;
+  walletLabel: string;
+  edited?: boolean;
+  appUrl: string;
+}): OutboundMessage {
+  const { to, name, amount, walletLabel, edited, appUrl } = opts;
+  const what = edited
+    ? `An allotment to ${walletLabel} was corrected to ${amount}.`
+    : `${amount} of AI Coach credits were added to ${walletLabel}.`;
+  return {
+    channel: 'email',
+    tag: edited ? 'credits_edited' : 'credits_received',
+    to,
+    subject: edited ? `Credits corrected: ${amount}` : `You received ${amount} of AI Coach credits`,
+    text: `Hi ${name},\n\n${what}\n\nPlease open AI Coach and confirm the amount is correct (Credits → Confirm received). Once you confirm, the sender can lock it.\n\n${appUrl}\n\n— AI Coach`,
+  };
+}
+
+export function creditRequestEmail(opts: {
+  to: string;
+  name: string;
+  requester: string;
+  walletLabel: string;
+  amount: string;
+  message?: string;
+  /** Requests to Admin: the payment to verify. */
+  payment?: { reference: string; method: string; paidOn: string };
+  appUrl: string;
+}): OutboundMessage {
+  const { to, name, requester, walletLabel, amount, message, payment, appUrl } = opts;
+  const pay = payment
+    ? `\n\nPayment to verify: ${amount} by ${payment.method.replace('_', ' ')} on ${payment.paidOn}, UTR/reference ${payment.reference}.`
+    : '';
+  const where = payment
+    ? 'Check the payment against your bank statement, then confirm or reject it under Credits & payments → Payments to verify.'
+    : 'You can accept or reject it on the Credits page in AI Coach.';
+  return {
+    channel: 'email',
+    tag: 'credit_request',
+    to,
+    subject: `${requester} is asking for ${amount} of AI Coach credits`,
+    text: `Hi ${name},\n\n${requester} (${walletLabel}) has asked for ${amount} of credits.${message ? `\n\nMessage: "${message}"` : ''}${pay}\n\n${where}\n\n${appUrl}\n\n— AI Coach`,
+  };
+}
+
+export function creditRequestDecisionEmail(opts: {
+  to: string;
+  name: string;
+  approved: boolean;
+  requested: string;
+  granted?: string;
+  walletLabel: string;
+  note?: string | null;
+  appUrl: string;
+}): OutboundMessage {
+  const { to, name, approved, requested, granted, walletLabel, note, appUrl } = opts;
+  const what = approved
+    ? `Your request for ${requested} (${walletLabel}) was accepted. ${granted} was added.`
+    : `Your request for ${requested} (${walletLabel}) was not accepted.`;
+  return {
+    channel: 'email',
+    tag: approved ? 'credit_request_approved' : 'credit_request_rejected',
+    to,
+    subject: approved ? `Credits added: ${granted}` : 'Your credit request was not accepted',
+    text: `Hi ${name},\n\n${what}${note ? `\n\nComment: "${note}"` : ''}\n\n${appUrl}\n\n— AI Coach`,
+  };
+}

@@ -5,6 +5,8 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Hourly: release stale credit holds. Nightly 02:00 IST: sync OpenRouter models & prices.
+  "triggers": { "crons": ["0 * * * *", "30 20 * * *"] },
 
   // The web app (apps/admin-web) is built into ../admin-web/dist and served by this Worker.
   // /api/* always goes to the Worker; everything else is the SPA.
@@ -39,6 +41,7 @@
   "env": {
     "staging": {
       "name": "aicoach-api-staging",
+      "triggers": { "crons": ["0 * * * *", "30 20 * * *"] },
       "d1_databases": [
         {
           "binding": "DB",

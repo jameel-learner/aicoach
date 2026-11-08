@@ -6,6 +6,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
+  // Afterwards, remove the test accounts/colleges/credits the run created (LOCAL DB only).
+  globalTeardown: './e2e/global-teardown.ts',
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

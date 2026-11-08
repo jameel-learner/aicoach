@@ -17,6 +17,7 @@
     "db:generate": "pnpm --filter @aicoach/db generate",
     "db:migrate:local": "pnpm --filter @aicoach/worker db:migrate:local",
     "db:seed:local": "pnpm --filter @aicoach/worker db:seed:local",
+    "cleanup-test:local": "pnpm --filter @aicoach/worker db:cleanup-test:local",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "deploy:staging": "pnpm --filter @aicoach/admin-web build && pnpm --filter @aicoach/worker deploy:staging",

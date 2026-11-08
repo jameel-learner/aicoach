@@ -8,7 +8,7 @@
 | Database | Local SQLite copy of D1 in `apps\worker\.wrangler\state` (survives restarts) |
 | Sign-in codes & emails | Printed in the **server terminal** (no real email is sent) |
 | Secrets | `apps\worker\.dev.vars` (git-ignored) |
-| AI calls (from Phase 1) | Real calls to OpenRouter using the key in `.dev.vars`, so **local AI use costs real credits** |
+| AI calls (from Phase 1) | Real calls to OpenRouter using the key in `.dev.vars`, so **local AI use costs real OpenRouter credit** |
 
 Contents: [1. One-time setup](#1-one-time-setup) · [2. Start (every day)](#2-start-every-day) · [3. First-time walkthrough (10 steps)](#3-first-time-walkthrough-10-steps) · [4. After pulling new code](#4-after-pulling-new-code) · [5. Stop / reset](#5-stop--reset) · [6. Troubleshooting](#6-troubleshooting) · [7. Commands](#7-commands)
 
@@ -117,6 +117,29 @@ Creates one account per role and links them: **Admin → Institution (POC) → C
 
 ---
 
+## 3b. Credits & AI walkthrough (Phase 1)
+
+Do this after the 10 steps above (same accounts). **AI calls are real and cost real OpenRouter credits**, but only fractions of a paisa each. All amounts are in **rupees** (1 credit = ₹1); only the OpenRouter balance is in US$.
+
+1. **Admin → AI models → Sync from OpenRouter.** About 400 models load. The table lists the four selectable ones (Gemini 2.5 Flash, Claude Sonnet 5.5, Claude Haiku 5.5, GPT-4o mini) with prices. Under *Model per feature*, every feature uses `google/gemini-2.5-flash` by default. *Voice input* only offers Gemini (the only one that takes audio).
+2. **Admin → Credits & payments.**
+   - *Platform float* shows your real OpenRouter balance in US$ with the ₹ equivalent.
+   - *Fee and exchange rate*: the fee (10%) and the USD→INR rate (₹88.00) are visible **only here**. Adjust the rate if you like (e.g. `88.50`).
+   - **1. Record an offline payment:** Credit purchase, paid by *Institution* (your college), e.g. ₹8350, UPI → **Record payment**. Step 2 is now pre-filled with ₹8350.
+   - **2. Issue credits:** change the amount if needed → **Issue credits**. The institution appears under *Top-level wallets*.
+   - Issue a small amount (e.g. `50`) **To: Platform wallet** for your own testing.
+3. **Admin → AI playground:** send a prompt. You see the answer, the model, the OpenRouter cost (US$) and the charge (₹). On the platform wallet there's no fee.
+4. **POC (incognito) → Credits:** the institution shows *1 to confirm*. Open it → **Confirm received**. In *Your downline*, give e.g. `2500` to the class → **Give**.
+5. **POC buys more from Admin:** on the institution wallet → *Buy credits*: amount `5000`, UTR `412345678901`, paid by UPI → **Submit payment**. *Your requests* shows *Waiting for reply*.
+6. **Admin → Credits & payments → Payments to verify:** the POC's payment is listed with the UTR (also in *Payments* as *To verify*). **Confirm & issue** → the institution gets ₹5000 and the payment becomes *Verified*. (Try **Reject** with a comment on another one: the payer sees the comment.)
+7. **Admin → Wallets → your institution:** the allotments show *Confirmed by receiver* → **Lock**. Try **Correct** on an unlocked allotment: the receiver must confirm again before it can be locked.
+8. **Teacher → Credits:** the class shows ₹2,500. Give some to the student. Then **AI playground** → *Pay from: the class* → send. The charge is in ₹; the teacher never sees the model, the US$ cost or the fee.
+9. **Phone (student) → Me → My credits:** balance in ₹, **Confirm received** for the teacher's allotment, then **Request credits** (amount + send). On the web, the **teacher's Credits page** shows *Credit requests waiting for you* → **Accept** (optionally a different amount) or **Reject** with a comment. The phone shows the reply and comment (pull to refresh / reopen Me).
+10. **Teacher asks the POC:** teacher → class wallet → *Need more credits?* → amount → **Request credits**. POC → Credits → **Accept** / **Reject**.
+    **Teacher buys for themself:** teacher → Credits → the *My own credits* card → **Buy credits** → amount paid, UTR → **Submit payment** (on the phone: Me → My credits → *I have paid: add credits*). Admin confirms it under *Payments to verify*; the teacher's own balance goes up.
+11. **POC → Credits → institution:** *Your downline* shows the class's usage. The POC can open the class wallet but not the student's (immediate downline only).
+12. **Admin → AI models:** switch *Admin/Teacher playground* to `openai/gpt-4o-mini`. Within ~30 seconds the playground answers from that model (shown in the answer). Switch it back.
+
 ## 4. After pulling new code
 
 When a phase adds dependencies or database changes:
@@ -178,6 +201,7 @@ Run from `E:\repository\aicoach`.
 | Build web app | `pnpm --filter @aicoach/admin-web build` |
 | Apply DB migrations | `pnpm db:migrate:local` |
 | Load pilot data | `pnpm db:seed:local` |
+| Remove leftover test data (`@example.com` accounts, E2E/Smoke colleges, their credits) | `pnpm cleanup-test:local` (runs automatically after `test:e2e`) |
 | Make a user Admin | `pnpm make-admin:local <email>` |
 | Recent dev emails (codes, links) | http://localhost:8787/api/dev/outbox?to=&lt;email&gt; |
 | Type-check everything | `pnpm typecheck` |

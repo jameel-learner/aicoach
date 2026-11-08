@@ -18,6 +18,13 @@ export interface Env {
   BETTER_AUTH_SECRET: string;
   RESEND_API_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
+  /** OpenRouter key: all LLM calls (decision 6). */
+  OPENROUTER_API_KEY?: string;
+  /**
+   * Optional Cloudflare AI Gateway base for OpenRouter, e.g.
+   * https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/openrouter. Unset = call OpenRouter directly.
+   */
+  AI_GATEWAY_URL?: string;
 }
 
 export interface SessionUser {

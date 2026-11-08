@@ -6,7 +6,11 @@ import { getAuth } from './auth';
 import type { AppBindings, Env } from './env';
 import { AppError } from './lib/http';
 import { createNotifier, memoryOutbox } from './lib/notifier';
+import { runScheduled } from './cron';
 import { adminRoutes } from './routes/admin';
+import { aiRoutes } from './routes/ai';
+import { adminCreditRoutes, creditRoutes } from './routes/credits';
+import { modelRoutes } from './routes/models';
 import { catalogRoutes } from './routes/catalog';
 import { institutionRoutes } from './routes/institution';
 import { meRoutes } from './routes/me';
@@ -50,7 +54,11 @@ export function createApp() {
 
   app.route('/me', meRoutes);
   app.route('/catalog', catalogRoutes);
+  app.route('/admin/models', modelRoutes);
+  app.route('/admin/credits', adminCreditRoutes);
   app.route('/admin', adminRoutes);
+  app.route('/credits', creditRoutes);
+  app.route('/ai', aiRoutes);
   app.route('/institutions', institutionRoutes);
   app.route('/teacher', teacherRoutes);
   app.route('/parent-consent', parentConsentRoutes);
@@ -76,6 +84,11 @@ export function createApp() {
 
 const app = createApp();
 
+// NOTE: the Worker's main module must only export handlers; Workers treats named exports as entry points.
+
 export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => app.fetch(request, env, ctx),
+  scheduled: (controller: ScheduledController, env: Env, ctx: ExecutionContext) => {
+    ctx.waitUntil(runScheduled(controller.cron, env));
+  },
 } satisfies ExportedHandler<Env>;

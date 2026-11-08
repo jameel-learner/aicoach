@@ -7,9 +7,9 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 1: LLM gateway, model switching & credits (not started). Phase 0 ✅ complete |
+| **Current phase** | Phase 1: LLM gateway, model switching & credits (🟡 built + tested locally; user's walkthrough feedback (INR, credit requests, hidden fee) implemented; waiting for user's local re-test, then staging + sign-off) |
 | **Last updated** | 2026-11-08 |
-| **Build / tests** | All green: typecheck (6 packages), 24 worker integration tests + 3 core tests (`pnpm test`), 3 Playwright browser tests (`test:e2e`), Android bundle builds |
+| **Build / tests** | All green: typecheck, 40 worker + 8 core tests (`pnpm test`), 4 Playwright browser tests (`test:e2e`, incl. credits, request and teacher-buy flows; test data removed afterwards), Android bundle builds |
 | **Blockers** | None |
 | **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live; codes via `wrangler tail --env staging`) |
 
@@ -32,7 +32,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Foundations | ✅ |
-| 1 | LLM gateway, model switching & credits | 🟡 next |
+| 1 | LLM gateway, model switching & credits | 🟡 |
 | 2 | Textbook ingestion & grounded Q&A | ⬜ |
 | 3 | Board strategy & pre-generated assets | ⬜ |
 | 4 | Session engine & explain/memorise journeys | ⬜ |
@@ -64,17 +64,23 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 - [x] CLAUDE.md *Commands* table
 - [x] **Exit:** E2E sign-up → 2FA → login per role; RBAC/tenant tests; deploy works; user verified all flows locally on web + phone and asked to close Phase 0 with the cloud deploy
 
-### Phase 1: LLM gateway, model switching & credits ⬜
-- [ ] OpenRouter client via AI Gateway (streaming, `usage.cost`, generation ID, gateway cache-hit detection)
-- [ ] `model_registry` + nightly sync from OpenRouter `/models`. Admin Models screen (per task, capability filter, fallback, price, eval score)
-- [ ] Wallet tree + `allotments` (allot → edit while open → receiver acknowledges → giver locks) + append-only ledger
-- [ ] Hold → settle metering, idempotency, reconciliation cron, stale-hold expiry
-- [ ] Offline payments (credit_purchase / onboarding_fee) → issuance. POC → class. Teacher → student. Per-student daily cap
-- [ ] Usage dashboards per role (self + immediate downline; Admin full tree), low-balance alerts, "Request credits"
-- [ ] Platform float panel (OpenRouter balance vs outstanding credits)
-- [ ] Admin LLM playground
+### Phase 1: LLM gateway, model switching & credits 🟡
+Backend (apps/worker): **done, 15 credits tests passing** (`test/credits.test.ts`, OpenRouter mocked in `test/openrouter-mock.ts`).
+- [x] Migration `0001_phase1_llm_credits.sql`: llm_models, model_registry, platform_settings, wallets (CHECK balance ≥ held ≥ 0), payments, allotments, allotment_edits, ledger_entries, credit_holds, llm_usage, credit_requests
+- [x] Money: wallets in **micro-INR** integers (1 credit = ₹1 = 1e6 micro), provider cost in nano-USD, converted at the Admin-set USD→INR rate (default ₹88.00, stored per usage row). Helpers + tests in `packages/core/src/money.ts` (decision 9.3-2; replaced the earlier nano-USD wallets)
+- [x] OpenRouter client (`src/llm/openrouter.ts`): `usage.cost`, generation id, fallback `models`, AI Gateway via optional `AI_GATEWAY_URL`, cache-hit (`cf-aig-cache-status: HIT`) charged 0
+- [x] Model registry (`src/llm/registry.ts`): per-task model + fallbacks, capability check, 30 s cache (switch without redeploy), sync from OpenRouter `/models`. The 4 decision-7 models are selectable by default; slugs verified live: `google/gemini-2.5-flash`, `anthropic/claude-sonnet-5.5`, `anthropic/claude-haiku-5.5`, `openai/gpt-4o-mini`
+- [x] Single metered path `runMeteredChat` (`src/llm/run.ts`): estimate (worst case over fallbacks) → hold (spend order) → call → settle actual × (1 + fee) / release on error
+- [x] Wallet tree + lazy creation (`src/credits/wallets.ts`), allot/edit/ack/lock (`src/credits/ledger.ts`), hold/settle/expiry (`src/credits/meter.ts`), per-role reports (`src/credits/reports.ts`)
+- [x] APIs: `/api/credits/*` (mine, wallet view, allotments, ack, lock, daily cap, request credits), `/api/admin/credits/*` (payments, issue, fee, float, top-level), `/api/admin/models/*` (list, sync, catalog, selectable, registry), `/api/ai/playground` (admin → platform wallet; teacher → class wallet then own)
+- [x] Crons: hourly stale-hold expiry, nightly model/price sync (wrangler.jsonc triggers)
+- [x] Email notices: credits received/corrected (to receiver), credit request (to giver)
+- [x] Web UI: Credits home + wallet page (all roles; downline, give, daily cap, allotments with confirm/correct/lock, usage), Admin Credits & payments (float, fee, record payment, issue, top-level wallets, payments list), Admin AI models (sync, per-feature model + fallback, add/remove models), AI playground (Admin; Teacher with class choice)
+- [x] Mobile: Me → My credits (balance in ₹, used 30 days, Confirm received, Request credits / "I have paid" with UTR, replies with comments)
+- [x] Walkthrough feedback (decision 9.3): credit requests with **accept/reject + comment** (`src/credits/requests.ts`, `/api/credits/requests`), requests to Admin need the **UTR** and create a **pending payment** that Admin confirms (credits issued automatically) or rejects; inboxes on web Credits page (teacher/POC) and Admin *Payments to verify*; **everything in ₹** (OpenRouter float in US$ with ₹ equivalent); **fee hidden** from everyone but Admin
+- [ ] Deferred (with reason): streaming responses (first needed by Phase 2 "Ask your textbook"); OpenRouter generation-endpoint reconciliation (only matters once streams can be aborted mid-way, Phase 2); eval scores in the Models screen (eval harness is Phase 2); usage roll-up table (live aggregates are fast enough at pilot scale)
 - [ ] **Exit:** see architecture §7 Phase 1 + user sign-off
-- **Phase-end staging steps:** `wrangler secret put OPENROUTER_API_KEY --env staging` (from apps/worker), then `pnpm deploy:staging` (applies the Phase 1 migrations), then test credits/model switching on staging
+- **Phase-end staging steps:** `wrangler secret put OPENROUTER_API_KEY --env staging` (from apps/worker), then `pnpm deploy:staging` (applies migration 0001), then in the staging Admin UI: Models → Sync, check the USD→INR rate, record a platform top-up payment and issue platform credits, then test
 
 ### Phase 2: Textbook ingestion & grounded Q&A ⬜
 - [ ] Institution textbook onboarding (`institution_books`: select existing or upload new)
@@ -121,3 +127,32 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Staging deployed. Perf fix: Better Auth instance is now cached per isolate (`getAuth`) instead of rebuilt on every request (warm /api/health 2–4 ms → 0–1 ms). Missing RESEND_API_KEY no longer breaks every route (fails only on send).
 - Guide updated: docs/setup-and-deployment.md §6 (using staging, deploying, what's left before the pilot).
 - **Phase 0 complete.** Next: Phase 1, starting with the user rotating the OpenRouter key.
+
+### 2026-11-08 (Phase 1, part 1: backend)
+- User kept the existing OpenRouter key; stored in `apps/worker/.dev.vars` only.
+- Verified live against OpenRouter: model slugs + prices, `usage.cost` in normal and streamed responses, `/credits` balance ($10 total, $2.76 used).
+- Built migration 0001, money helpers (nano-USD), OpenRouter client, registry, metering, ledger, reports, APIs, crons. 37 worker tests pass (incl. 50 concurrent calls never overspend, exact 10% fee, ledger invariant, visibility per role, model switching).
+- Fixed found-by-tests: refusal message now explains the first-choice wallet's reason (e.g. daily cap) instead of the fallback wallet's.
+- Next: web + mobile UI for credits, models and playground; then local walkthrough with the user.
+
+### 2026-11-08 (Phase 1, part 2: UI + real end-to-end)
+- Built web UI (credits, admin credits/payments, models, playground) and mobile My credits card.
+- Real smoke test on LOCAL against real OpenRouter: 425 models synced; admin call billed = raw (no fee); teacher call raw $0.0000544 → billed $0.00005984 (exactly ×1.10); model switch to gpt-4o-mini took effect; float read real balance ($7.24). Total spend ≈ $0.00007.
+- Bugs found and fixed: (1) named exports from the worker entry broke workerd startup (moved crons to `src/cron.ts`, added `test/entry.test.ts`); (2) model sync used `NOT IN (425 ids)`, over D1's 100-parameter limit (now timestamp-based; mock returns 150 filler models); (3) web `Field` wrapped controls in `<label>`, so a select's accessible name included its selected option (now label + htmlFor).
+- Added `e2e/credits.spec.ts` (payment → issue → POC confirm → give → teacher sees; playground real call).
+- Local walkthrough for the user: docs/environments/local.md §3b.
+- Not committed yet (phase-wise commit after sign-off).
+
+### 2026-11-08 (Phase 1, part 3: walkthrough feedback)
+- User feedback after the local walkthrough → decisions 9.3-1..3 (architecture §6.6 + §9.3 updated first):
+  - Credit requests now appear on the giver's web Credits page; the giver **accepts** (automatic allotment, amount editable) or **rejects with a comment**; the requester sees status + comment (web and phone). One pending request per wallet; requester can cancel.
+  - Requests that go to **Admin** (institution wallet, direct teacher/student wallet) must carry the **payment UTR**. They create a `pending` payment; Admin's *Payments to verify* confirms (payment → verified, credits issued in the same flow) or rejects (payment → rejected, UTR can be resubmitted). Duplicate UTRs are refused. Manual issue against a pending payment is refused.
+  - **All amounts in ₹** (1 credit = ₹1). Wallet money is now micro-INR; OpenRouter cost stays nano-USD and is converted at an Admin-set USD→INR rate (default ₹88.00, `PUT /api/admin/credits/rate`), stored per usage row. The platform float shows US$ with ₹ equivalent.
+  - **Fee hidden**: removed "1 credit = US$1" and "+10% fee" wording everywhere outside Admin (web + phone). E2E asserts a teacher's Credits page shows no "US$", "10%" or "fee".
+- Schema: migration 0001 regenerated (it was never applied to staging): `*_micro` columns, `payments.status/verified_by/verified_at`, `llm_usage.raw_usd_nano/usd_inr_paise`, `credit_requests` redesigned. Local DB: Phase 1 tables dropped and 0001 re-applied (Phase 0 accounts kept; backup in the session scratchpad).
+- Fixed along the way: Admin Credits page reset the issue form from stale state after a request finished (now functional state updates); E2E sign-in helper could reuse an old OTP on a second sign-in.
+- Tests: 40 worker (2 new: student→teacher accept/reject; UTR → pending payment → Admin confirm/reject), 8 core (INR conversion incl. BigInt for large values), 4 E2E (credits flow now includes teacher request → POC accepts), Android bundle OK.
+- Seed check (user asked): `packages/db/seed/seed.sql` (also used for staging) holds only board/level/subject reference data, with no colleges, wallets or credits; now documented in the file. The "Credit E2E College …" rows with 100 are created by `e2e/credits.spec.ts` on LOCAL and are ₹100 (micro-INR). The E2E now refuses to run unless `/api/health` reports `development`, and asserts the issued amount shows as ₹100.00; the worker test asserts 100 = 100,000,000 micro-INR.
+- 2026-11-09: **Teacher buys own credits** from Admin with a UTR (web: *My own credits* card → *Buy credits*; phone: Me → *I have paid*). The API already supported it; the web entry point is now visible and the E2E covers teacher pays → Admin confirms → ₹200 on the teacher's own wallet.
+- 2026-11-09: **Test-data cleanup**: `apps/worker/scripts/cleanup-test-data.mjs` (`pnpm cleanup-test:local`, LOCAL only) removes `@example.com` accounts and "Credit E2E College / E2E PU College / Smoke College <n>" institutions with all their classes, wallets, payments, allotments, ledger, usage and requests, then recomputes the platform wallet from its ledger. Runs automatically as Playwright `globalTeardown`. Run once on the user's local DB: only Shaheen PU College and the user's 4 accounts remain; every wallet balance equals its ledger sum.
+- Next: user re-tests on LOCAL (local.md §3b, updated), then commit + staging + sign-off.

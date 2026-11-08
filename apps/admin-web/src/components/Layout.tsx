@@ -19,6 +19,10 @@ export function navFor(me: MeResponse): { section: string; items: NavItem[] }[] 
         { to: '/admin/institutions', label: 'Institutions' },
         { to: '/admin/taxonomy', label: 'Boards & subjects' },
         { to: '/admin/users', label: 'Users' },
+        { to: '/admin/credits', label: 'Credits & payments' },
+        { to: '/admin/models', label: 'AI models' },
+        { to: '/credits', label: 'Wallets' },
+        { to: '/playground', label: 'AI playground' },
       ],
     });
   }
@@ -31,9 +35,23 @@ export function navFor(me: MeResponse): { section: string; items: NavItem[] }[] 
         label: i.name,
       })),
     });
+    // Teachers already get a Credits link under Teaching.
+    if (me.user.role !== 'teacher') {
+      sections.push({
+        section: 'Institution credits',
+        items: [{ to: '/credits', label: 'Credits' }],
+      });
+    }
   }
   if (me.user.role === 'teacher') {
-    sections.push({ section: 'Teaching', items: [{ to: '/teacher', label: 'My classes' }] });
+    sections.push({
+      section: 'Teaching',
+      items: [
+        { to: '/teacher', label: 'My classes' },
+        { to: '/credits', label: 'Credits' },
+        { to: '/playground', label: 'AI playground' },
+      ],
+    });
   }
   return sections;
 }

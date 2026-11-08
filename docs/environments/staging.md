@@ -12,7 +12,7 @@
 | AI calls (from Phase 1) | Same OpenRouter account; staging usage costs real credits |
 | Live since | 2026-11-08 (Phase 0) |
 
-Contents: [1. End-of-phase checklist](#1-end-of-phase-checklist) · [2. Deploy](#2-deploy) · [3. Test on staging](#3-test-on-staging) · [4. Secrets & config](#4-secrets--config) · [5. Before real users](#5-before-real-users) · [6. How staging was created](#6-how-staging-was-created) · [7. Troubleshooting](#7-troubleshooting)
+Contents: [1. End-of-phase checklist](#1-end-of-phase-checklist) · [2. Deploy](#2-deploy) · [3. Test on staging](#3-test-on-staging) · [3a. Phase 1 on staging](#3a-phase-1-on-staging-credits--ai) · [3b. Why automated browser tests don't run on staging](#3b-why-automated-browser-tests-dont-run-on-staging) · [4. Secrets & config](#4-secrets--config) · [5. Before real users](#5-before-real-users) · [6. How staging was created](#6-how-staging-was-created) · [7. Troubleshooting](#7-troubleshooting)
 
 ---
 
@@ -77,6 +77,59 @@ It prints `AI Coach mobile → STAGING backend`, and the app shows **"STAGING se
 
 ---
 
+## 3a. Phase 1 on staging (credits & AI)
+
+Do these once, in order. Steps 1 to 3 are one-time setup for Phase 1; step 4 is the test.
+
+**1. Code committed and pushed, CI green** (Claude does this when you say so).
+
+**2. Set the OpenRouter key on staging** (same key as in your local `apps\worker\.dev.vars`; paste it when asked):
+
+```powershell
+cd E:\repository\aicoach\apps\worker
+pnpm exec wrangler secret put OPENROUTER_API_KEY --env staging
+pnpm exec wrangler secret list --env staging   # should list BETTER_AUTH_SECRET, OPENROUTER_API_KEY, TURNSTILE_SECRET_KEY
+```
+
+**3. Deploy** (applies migration `0001_phase1_llm_credits` to the staging database and registers the two cron jobs: hourly hold clean-up, nightly model/price sync):
+
+```powershell
+cd E:\repository\aicoach
+pnpm deploy:staging
+```
+
+Answer **y** when it asks to apply the migration. Your Phase 0 staging accounts, institution and classes are kept; the new credit tables start empty.
+
+**4. Test.** Keep `pnpm logs:staging` running in Terminal 1 (sign-in codes **and** the credit emails, such as requests, decisions and "credits received", appear there). Then follow the **12 steps of the [local Credits & AI walkthrough](local.md#3b-credits--ai-walkthrough-phase-1)** on https://aicoach-api-staging.jameel-outskill.workers.dev, with these differences:
+
+| Local walkthrough says | On staging |
+|---|---|
+| "see Terminal 1" for emails | `pnpm logs:staging` output |
+| Accounts from the local 10 steps | Your **staging** accounts from Phase 0 (POC, teacher, student already exist there) |
+| Phone: `pnpm dev:mobile` | `pnpm dev:mobile:staging` (app shows "STAGING server") |
+| Step 1: Sync models | Must be done first on staging, otherwise the model lists are empty and the playground uses estimated prices |
+| Step 2: Platform wallet | Issue yourself a small amount (e.g. ₹50) **To: Platform wallet** before using the playground |
+| UTRs | Use made-up test UTRs (e.g. `999900000001`); each UTR can be used only once |
+
+Staging AI calls cost real OpenRouter credit (the whole walkthrough is well under ₹1). The *Platform float* shows the live OpenRouter balance, shared with local.
+
+**5. Sign off:** tell Claude Phase 1 works on staging. Claude records it in progress.md and starts Phase 2.
+
+**If something fails only on staging:** check `pnpm logs:staging` for the error, and the secrets list. "AI is not configured (OPENROUTER_API_KEY missing)" means step 2 was skipped. An error about a missing table means the migration didn't apply; re-run `pnpm deploy:staging`.
+
+---
+
+## 3b. Why automated browser tests don't run on staging
+
+The Playwright tests (`test:e2e`) refuse to run unless the server says it is `development`. That's deliberate:
+
+1. **They need a back door that staging must not have.** The tests read sign-in codes from `/api/dev/outbox`, which lists recent emails. Locally that's a convenience; on a public URL it would let anyone read anyone's sign-in code and log in as them. So it only exists in development, and the tests can't sign in on staging.
+2. **They promote users to Admin directly in the database** (`make-admin --local`). Doing that against the staging database from a test run means automated writes with full Admin rights to a shared cloud database.
+3. **They leave data behind.** Each run creates accounts, a college, payments, credits and allotments. Locally a clean-up script deletes them by name pattern afterwards. Pattern-deleting rows in a cloud database is the kind of mistake that can remove real data, so the clean-up is LOCAL-only as well.
+4. **Staging tests something different.** The automated tests already prove the behaviour on exactly the same code, locally. What only staging can show is the deployed setup: secrets, migrations, cron jobs, the phone over mobile data, real OpenRouter from Cloudflare. A person walking through it checks that best. Later, with real users on production, we can add a read-only smoke check (health, sign-in page loads, no writes) that is safe to run against a deployed environment.
+
+---
+
 ## 4. Secrets & config
 
 Secrets are set once per environment from `apps\worker`; each command asks you to paste the value.
@@ -91,7 +144,7 @@ pnpm exec wrangler secret list --env staging   # see which exist (values are nev
 |---|---|---|
 | `BETTER_AUTH_SECRET` | ✅ set (random, different from local) | Phase 0 |
 | `TURNSTILE_SECRET_KEY` | ✅ set (Cloudflare **test** key) | Phase 0 |
-| `OPENROUTER_API_KEY` | ⬜ set at the end of Phase 1 | Phase 1 |
+| `OPENROUTER_API_KEY` | ⬜ set at the end of Phase 1 ([§3a](#3a-phase-1-on-staging-credits--ai) step 2) | Phase 1 |
 | `RESEND_API_KEY` | ⬜ when a sender domain exists | Pilot |
 
 Non-secret settings are under `env.staging.vars` in `apps\worker\wrangler.jsonc` (e.g. `EMAIL_PROVIDER` is `console`). They take effect on the next deploy.

@@ -7,12 +7,17 @@ import {
 } from '@tanstack/react-router';
 import { Layout } from './components/Layout';
 import { useMe } from './lib/queries';
+import { AdminCreditsPage } from './pages/admin/AdminCreditsPage';
 import { InstitutionsPage } from './pages/admin/InstitutionsPage';
+import { ModelsPage } from './pages/admin/ModelsPage';
 import { TaxonomyPage } from './pages/admin/TaxonomyPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { AuthPage } from './pages/AuthPage';
 import { HomePage } from './pages/HomePage';
 import { InstitutionPage } from './pages/InstitutionPage';
+import { CreditsHomePage } from './pages/credits/CreditsHomePage';
+import { WalletPage } from './pages/credits/WalletPage';
+import { PlaygroundPage } from './pages/PlaygroundPage';
 import { ClassStudentsPage, TeacherClassesPage } from './pages/TeacherPages';
 
 function Centered({ children }: { children: React.ReactNode }) {
@@ -66,6 +71,19 @@ const institutionRoute = createRoute({
   component: InstitutionPage,
 });
 const teacherRoute = createRoute({ ...parent, path: '/teacher', component: TeacherClassesPage });
+const adminCreditsRoute = createRoute({
+  ...parent,
+  path: '/admin/credits',
+  component: AdminCreditsPage,
+});
+const adminModelsRoute = createRoute({ ...parent, path: '/admin/models', component: ModelsPage });
+const creditsRoute = createRoute({ ...parent, path: '/credits', component: CreditsHomePage });
+const walletRoute = createRoute({
+  ...parent,
+  path: '/credits/wallets/$walletId',
+  component: WalletPage,
+});
+const playgroundRoute = createRoute({ ...parent, path: '/playground', component: PlaygroundPage });
 const classRoute = createRoute({
   ...parent,
   path: '/classes/$classId',
@@ -82,6 +100,11 @@ const routeTree = rootRoute.addChildren([
     institutionRoute,
     teacherRoute,
     classRoute,
+    adminCreditsRoute,
+    adminModelsRoute,
+    creditsRoute,
+    walletRoute,
+    playgroundRoute,
   ]),
 ]);
 
