@@ -51,25 +51,36 @@ packages/llm     model registry client, router, prompts, metering hooks
 packages/journeys journey graph definitions
 packages/ui-tokens design tokens
 evals/           golden sets + eval runner
-docs/            architecture.md (design), progress.md (status), feature_description.txt (original spec)
+docs/            architecture.md (design), progress.md (status), setup-and-deployment.md (how to run/deploy),
+                 engagement-policy.md (review checklist), feature_description.txt (original spec)
 ```
 
-*(This structure is created in Phase 0. Update this section if it changes.)*
+*(Keep this map current when the structure changes.)*
 
 ## Commands
 
-*(Filled in during Phase 0. Keep this list accurate.)*
+Step-by-step human guide (first-time setup, the 10-step walkthrough, troubleshooting, staging deploy): [docs/setup-and-deployment.md](docs/setup-and-deployment.md). Keep it in sync when commands or flows change.
+
+Run from the repo root unless noted. On Windows, pnpm is installed in `%APPDATA%
+pm` via Corepack (`corepack enable pnpm --install-directory "$APPDATA/npm"`).
 
 | Task | Command |
 |---|---|
-| Install | `corepack enable && pnpm install` |
-| Dev (worker) | TBD |
-| Dev (web) | TBD |
-| Dev (mobile) | TBD |
-| Tests | TBD |
-| Evals | TBD |
-| DB migration | TBD |
-| Deploy | TBD |
+| Install | `pnpm install` |
+| First-time local DB | `pnpm db:migrate:local && pnpm db:seed:local` |
+| Local secrets | copy `apps/worker/.dev.vars.example` to `apps/worker/.dev.vars` and set `BETTER_AUTH_SECRET` |
+| Dev: API + built web app | `pnpm dev:worker` (http://localhost:8787, also on the LAN IP for phones) |
+| Dev: web app with hot reload | `pnpm dev:web` (http://localhost:5173, proxies `/api` to :8787) |
+| Dev: mobile | `pnpm dev:mobile`, then scan the QR code in Expo Go (phone on the same Wi-Fi). API URL is auto-derived |
+| Read dev emails (OTP, consent links) | printed in the `dev:worker` terminal, or `GET /api/dev/outbox?to=<email>` (development only) |
+| Make a user Admin (local) | `pnpm --filter @aicoach/worker db:make-admin:local -- someone@example.com` |
+| Typecheck all | `pnpm typecheck` |
+| Tests (Workers runtime + local D1) | `pnpm test` |
+| Web E2E (needs `dev:worker` running or starts it) | `pnpm --filter @aicoach/admin-web test:e2e` |
+| Format | `pnpm format` / `pnpm format:check` |
+| New DB migration | edit `packages/db/src/schema.ts`, then `pnpm db:generate` and `pnpm db:migrate:local` |
+| Mobile bundle check | `cd apps/mobile && npx expo export --platform android --output-dir <tmp>` |
+| Deploy staging | `pnpm --filter @aicoach/worker deploy:staging` (needs `wrangler login` + real ids in wrangler.jsonc) |
 
 ## Environment notes
 

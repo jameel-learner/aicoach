@@ -1,0 +1,6 @@
+# Copy to .dev.vars (git-ignored) for local development.
+BETTER_AUTH_SECRET=change-me-to-a-long-random-string-at-least-32-chars
+# Optional locally (EMAIL_PROVIDER=console prints emails to the terminal instead):
+RESEND_API_KEY=
+# Cloudflare's public Turnstile test secret: always passes.
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA

@@ -7,10 +7,10 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 0: Foundations (not started) |
+| **Current phase** | Phase 0: Foundations (local flows verified by user on web + phone; staging deploy + CI run pending) |
 | **Last updated** | 2026-11-08 |
-| **Build / tests** | n/a (no code yet) |
-| **Blockers** | Prerequisites below (accounts / keys) |
+| **Build / tests** | All green: typecheck (6 packages), 24 worker integration tests + 3 core tests (`pnpm test`), 3 Playwright browser tests (`test:e2e`), Android bundle builds |
+| **Blockers** | None for local. Remaining Phase 0: staging deploy (wrangler login done), first CI run on GitHub (needs push) |
 
 Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria passed + user sign-off) · ⛔ blocked
 
@@ -30,7 +30,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Foundations | ⬜ |
+| 0 | Foundations | 🟡 |
 | 1 | LLM gateway, model switching & credits | ⬜ |
 | 2 | Textbook ingestion & grounded Q&A | ⬜ |
 | 3 | Board strategy & pre-generated assets | ⬜ |
@@ -45,26 +45,28 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 
 ## Phase checklists
 
-### Phase 0: Foundations ⬜
-- [ ] Monorepo scaffold (pnpm workspaces, Turborepo, TS strict, ESLint/Prettier, Vitest)
-- [ ] `apps/worker`: Hono app, wrangler config with dev/staging/prod envs, health endpoint
-- [ ] `packages/db`: Drizzle + D1 schema v1 (users, roles, institutions, class_groups, boards/classes/subjects/offerings, enrolments, parent_contacts, consents, audit_log) + migrations
-- [ ] Seed: KSEAB → 2nd PUC → Accountancy
-- [ ] Better Auth: email+password, email-OTP 2FA on by default, Turnstile, roles (Admin, Institution POC, Teacher, Student)
-- [ ] `Notifier` interface + email adapter (Resend)
-- [ ] RBAC + tenant-scoping middleware
-- [ ] `apps/admin-web`: login/2FA, role areas (Admin: taxonomy, institutions, users/enrolments · POC: classes, teachers · Teacher: my classes/students)
-- [ ] `apps/mobile`: Expo shell, login/2FA, onboarding with parent contact + consent, enrolment picker, vertical-first nav
-- [ ] Design tokens + accessibility baseline
-- [ ] Engagement policy document (§6.1) as review checklist
-- [ ] CI (GitHub Actions): lint, typecheck, tests. Deploy to staging
-- [ ] Fill in the CLAUDE.md *Commands* table
+### Phase 0: Foundations 🟡
+- [x] Monorepo scaffold (pnpm 12 workspaces, hoisted, Turborepo, TS 6 strict, Prettier, Vitest 4)
+- [ ] ESLint (deferred: Prettier + strict TS cover Phase 0; add with typescript-eslint + react-hooks before Phase 2)
+- [x] `apps/worker`: Hono app, wrangler config (dev + staging env; staging ids are placeholders), `/api/health`, `/api/config`
+- [x] `packages/db`: Drizzle + D1 schema v1 (users, roles, institutions, class_groups, boards/classes/subjects/offerings, enrolments, parent_contacts, consents, audit_log) + migrations
+- [x] Seed: KSEAB → 2nd PUC → Accountancy (`packages/db/seed/seed.sql`)
+- [x] Better Auth: email+password (PBKDF2 hashing for Workers CPU limits), email-OTP 2FA on by default, no session on sign-up, Turnstile (captcha plugin), roles, DB rate limiting
+- [x] `Notifier` interface + console/memory/Resend adapters
+- [x] RBAC + tenant-scoping (`requireAuth`, `requireRole`, `lib/access.ts`); admin/institution/teacher/me/parent-consent APIs
+- [x] `apps/admin-web`: login/sign-up/2FA with Turnstile; Admin (institutions + POCs, boards/levels/subjects/offerings, users/roles) · POC (classes, join codes, class teacher, teachers) · Teacher (my classes, students)
+- [x] `apps/mobile` (Expo SDK 58): sign-in/up + Turnstile (WebView) + email code, onboarding (parent contact + consent ack → join class by code or self-study), enrolment switcher, tabs Home/Learn/Practice/Me. Typechecks and bundles; **not yet run on a device**
+- [x] Design tokens (`packages/ui-tokens`, light/dark) + accessibility baseline (48dp targets, labels/roles, 16px body, focus rings)
+- [x] Engagement policy checklist: [engagement-policy.md](engagement-policy.md)
+- [x] CI workflow `.github/workflows/ci.yml` (format, typecheck, tests, web build). Not yet run on GitHub (needs push)
+- [ ] Staging deploy: `wrangler login`, `wrangler d1 create aicoach-staging`, put id + workers.dev subdomain in wrangler.jsonc, set secrets, deploy
+- [x] CLAUDE.md *Commands* table
 - [ ] **Exit:** E2E sign-up → 2FA → login per role; RBAC/tenant tests; deploy works; user sign-off
 
 ### Phase 1: LLM gateway, model switching & credits ⬜
 - [ ] OpenRouter client via AI Gateway (streaming, `usage.cost`, generation ID, gateway cache-hit detection)
 - [ ] `model_registry` + nightly sync from OpenRouter `/models`. Admin Models screen (per task, capability filter, fallback, price, eval score)
-- [ ] Wallet tree + `allotments` (open/locked, consent-based corrections) + append-only ledger
+- [ ] Wallet tree + `allotments` (allot → edit while open → receiver acknowledges → giver locks) + append-only ledger
 - [ ] Hold → settle metering, idempotency, reconciliation cron, stale-hold expiry
 - [ ] Offline payments (credit_purchase / onboarding_fee) → issuance. POC → class. Teacher → student. Per-student daily cap
 - [ ] Usage dashboards per role (self + immediate downline; Admin full tree), low-balance alerts, "Request credits"
@@ -89,7 +91,9 @@ Checklists are expanded from architecture §7 when the phase starts.
 
 ## Known issues / bugs
 
-*(none yet)*
+- Turnstile on mobile loads in a WebView with baseUrl = API URL. In staging/prod the Turnstile site key must allow that hostname. Untested on a device.
+- Better Auth rate limiting is disabled in the test env, so the classroom-sized limits in `auth.ts` aren't covered by automated tests.
+- Resend free tier without a verified domain only delivers to the account owner's address. Real users need a domain before the pilot.
 
 ## Pending confirmations
 
@@ -100,4 +104,13 @@ Checklists are expanded from architecture §7 when the phase starts.
 ### 2026-11-08
 - Wrote architecture.md v2 (AI approach, stack, phases), recorded all Section 9 decisions, created CLAUDE.md and progress.md.
 - Confirmed allotment lifecycle. Prerequisites recorded. Added .gitignore (textbooks + secrets excluded).
-- Next: start Phase 0.
+- Started Phase 0.
+
+### 2026-11-08 (Phase 0 build)
+- Built monorepo, D1 schema + migration, Better Auth (PBKDF2, email-OTP 2FA default, Turnstile, rate limits sized for school NAT), RBAC/tenant APIs, parent consent flow (GET shows / POST confirms), web app, mobile app, CI, engagement policy.
+- Fixed found-by-tests bugs: email validation before trim (trailing spaces rejected); 2FA plugin default limit 3/10s per IP would block a classroom; make-admin script broke on Windows shell quoting.
+- Added dev-only `/api/dev/outbox` (404 outside development) for E2E to read OTPs.
+- Phone test bug (fixed): signed-out users landed on the "Enter your code" screen (router fallback picked `verify`). `verify` now redirects to sign-in unless a sign-in is in progress, and has a "Back to sign in" link; sign-up's "I already have an account" now replaces to sign-in.
+- Phone test bug 2 (fixed): after the password step the app bounced back to sign-in. Root cause: Better Auth sets `isPending=true` on every session re-check while signed out, and the root layout swapped the whole <Stack> for a spinner, which discarded navigation state. The Stack now stays mounted after first boot; loading and error states are overlays (`apps/mobile/src/app/_layout.tsx`). This was also the real cause of bug 1.
+- **User verified all 10 walkthrough steps on web + Android phone (all login/onboarding flows work).** Steps saved as [setup-and-deployment.md](setup-and-deployment.md).
+- Next: user tests on phone + signs off; staging deploy once `wrangler login` is done; then commit Phase 0 and start Phase 1.

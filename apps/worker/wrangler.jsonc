@@ -1,0 +1,60 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "aicoach-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // The web app (apps/admin-web) is built into ../admin-web/dist and served by this Worker.
+  // /api/* always goes to the Worker; everything else is the SPA.
+  "assets": {
+    "directory": "../admin-web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+
+  // Local development. `database_id` is a placeholder for local mode only; staging/production
+  // ids come from `wrangler d1 create` (see docs/progress.md).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "aicoach-dev",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/db/migrations",
+    },
+  ],
+  "vars": {
+    "APP_ENV": "development",
+    "APP_URL": "http://localhost:8787",
+    "WEB_ORIGIN": "http://localhost:5173",
+    "EMAIL_PROVIDER": "console",
+    "EMAIL_FROM": "AI Coach <onboarding@resend.dev>",
+    // Cloudflare's public Turnstile test site key: always passes. Real keys are set per environment.
+    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+  },
+  // Secrets (set with `wrangler secret put` or in .dev.vars locally):
+  //   BETTER_AUTH_SECRET, RESEND_API_KEY, TURNSTILE_SECRET_KEY
+
+  "env": {
+    "staging": {
+      "name": "aicoach-api-staging",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "aicoach-staging",
+          "database_id": "REPLACE_WITH_STAGING_D1_ID",
+          "migrations_dir": "../../packages/db/migrations",
+        },
+      ],
+      "vars": {
+        "APP_ENV": "staging",
+        "APP_URL": "https://aicoach-api-staging.REPLACE_WITH_SUBDOMAIN.workers.dev",
+        "WEB_ORIGIN": "https://aicoach-api-staging.REPLACE_WITH_SUBDOMAIN.workers.dev",
+        "EMAIL_PROVIDER": "resend",
+        "EMAIL_FROM": "AI Coach <onboarding@resend.dev>",
+        "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+      },
+    },
+  },
+}

@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+**/migrations/**
+**/dist/**
+**/.expo/**
+**/.wrangler/**
+docs/textbooks/**
+docs/**
+*.md
+**/AGENTS.md
+apps/mobile/assets/**

@@ -1,0 +1,32 @@
+{
+  "name": "@aicoach/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/ensure-assets-dir.mjs",
+    "dev": "wrangler dev --ip 0.0.0.0 --port 8787",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:seed:local": "wrangler d1 execute DB --local --file=../../packages/db/seed/seed.sql",
+    "db:make-admin:local": "node scripts/make-admin.mjs --local",
+    "deploy:staging": "wrangler deploy --env staging",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@aicoach/core": "workspace:*",
+    "@aicoach/db": "workspace:*",
+    "@better-auth/expo": "1.7.18",
+    "better-auth": "1.7.18",
+    "drizzle-orm": "0.45.4",
+    "hono": "4.13.17",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.6.0",
+    "@cloudflare/workers-types": "5.20261108.1",
+    "vitest": "~4.1.0",
+    "wrangler": "4.158.0"
+  }
+}

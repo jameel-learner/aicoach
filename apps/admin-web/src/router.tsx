@@ -1,0 +1,94 @@
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Navigate,
+  Outlet,
+} from '@tanstack/react-router';
+import { Layout } from './components/Layout';
+import { useMe } from './lib/queries';
+import { InstitutionsPage } from './pages/admin/InstitutionsPage';
+import { TaxonomyPage } from './pages/admin/TaxonomyPage';
+import { UsersPage } from './pages/admin/UsersPage';
+import { AuthPage } from './pages/AuthPage';
+import { HomePage } from './pages/HomePage';
+import { InstitutionPage } from './pages/InstitutionPage';
+import { ClassStudentsPage, TeacherClassesPage } from './pages/TeacherPages';
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4 text-muted">{children}</div>
+  );
+}
+
+const rootRoute = createRootRoute({ component: () => <Outlet /> });
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  component: function Login() {
+    const { data: me, isLoading } = useMe();
+    if (isLoading) return <Centered>Loading…</Centered>;
+    if (me) return <Navigate to="/" />;
+    return <AuthPage />;
+  },
+});
+
+/** Signed-in shell. The API enforces every permission; the UI only hides what you can't use. */
+const appRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'app',
+  component: function AppShell() {
+    const { data: me, isLoading, error } = useMe();
+    if (isLoading) return <Centered>Loading…</Centered>;
+    if (error) return <Centered>Could not reach the server. Please retry.</Centered>;
+    if (!me) return <Navigate to="/login" />;
+    return <Layout me={me} />;
+  },
+});
+
+const parent = { getParentRoute: () => appRoute };
+const homeRoute = createRoute({ ...parent, path: '/', component: HomePage });
+const adminInstitutionsRoute = createRoute({
+  ...parent,
+  path: '/admin/institutions',
+  component: InstitutionsPage,
+});
+const adminTaxonomyRoute = createRoute({
+  ...parent,
+  path: '/admin/taxonomy',
+  component: TaxonomyPage,
+});
+const adminUsersRoute = createRoute({ ...parent, path: '/admin/users', component: UsersPage });
+const institutionRoute = createRoute({
+  ...parent,
+  path: '/institutions/$institutionId',
+  component: InstitutionPage,
+});
+const teacherRoute = createRoute({ ...parent, path: '/teacher', component: TeacherClassesPage });
+const classRoute = createRoute({
+  ...parent,
+  path: '/classes/$classId',
+  component: ClassStudentsPage,
+});
+
+const routeTree = rootRoute.addChildren([
+  loginRoute,
+  appRoute.addChildren([
+    homeRoute,
+    adminInstitutionsRoute,
+    adminTaxonomyRoute,
+    adminUsersRoute,
+    institutionRoute,
+    teacherRoute,
+    classRoute,
+  ]),
+]);
+
+export const router = createRouter({ routeTree, defaultPreload: 'intent' });
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router;
+  }
+}

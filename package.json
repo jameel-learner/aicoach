@@ -1,0 +1,27 @@
+{
+  "name": "aicoach",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:worker": "pnpm --filter @aicoach/worker dev",
+    "dev:web": "pnpm --filter @aicoach/admin-web dev",
+    "dev:mobile": "pnpm --filter @aicoach/mobile start",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @aicoach/db generate",
+    "db:migrate:local": "pnpm --filter @aicoach/worker db:migrate:local",
+    "db:seed:local": "pnpm --filter @aicoach/worker db:seed:local",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "turbo": "2.11.10",
+    "typescript": "~6.0.3"
+  }
+}

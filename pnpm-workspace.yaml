@@ -1,0 +1,15 @@
+packages:
+  - apps/*
+  - packages/*
+
+# React Native / Metro works most reliably with a flat node_modules.
+minimumReleaseAgeExclude:
+  - '@cloudflare/workers-types@5.20261108.1'
+
+nodeLinker: hoisted
+
+# Packages allowed to run install scripts (pnpm blocks them by default).
+allowBuilds:
+  esbuild: true
+  workerd: true
+  sharp: false

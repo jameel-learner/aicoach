@@ -1,0 +1,86 @@
+@import 'tailwindcss';
+
+/* Design tokens (mirrors packages/ui-tokens). Light by default, dark via system preference or data-theme. */
+:root {
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef1f5;
+  --color-border: #d8dee6;
+  --color-text: #14181f;
+  --color-text-muted: #55606e;
+  --color-primary: #1f5fbf;
+  --color-primary-text: #ffffff;
+  --color-accent: #0f8a6a;
+  --color-warning: #a35a00;
+  --color-danger: #b42318;
+  --color-focus: #7aa7f0;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #0e1116;
+    --color-surface: #161b22;
+    --color-surface-muted: #1f2630;
+    --color-border: #2e3744;
+    --color-text: #e8ecf2;
+    --color-text-muted: #9aa6b5;
+    --color-primary: #6ea2f5;
+    --color-primary-text: #0b1220;
+    --color-accent: #3cc79f;
+    --color-warning: #f0a63a;
+    --color-danger: #f27a6e;
+    --color-focus: #3b6cc4;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #0e1116;
+  --color-surface: #161b22;
+  --color-surface-muted: #1f2630;
+  --color-border: #2e3744;
+  --color-text: #e8ecf2;
+  --color-text-muted: #9aa6b5;
+  --color-primary: #6ea2f5;
+  --color-primary-text: #0b1220;
+  --color-accent: #3cc79f;
+  --color-warning: #f0a63a;
+  --color-danger: #f27a6e;
+  --color-focus: #3b6cc4;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-muted: var(--color-surface-muted);
+  --color-border: var(--color-border);
+  --color-text: var(--color-text);
+  --color-muted: var(--color-text-muted);
+  --color-primary: var(--color-primary);
+  --color-on-primary: var(--color-primary-text);
+  --color-accent: var(--color-accent);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+  --color-focus: var(--color-focus);
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
