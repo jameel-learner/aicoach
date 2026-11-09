@@ -141,7 +141,7 @@ Answer **y** when it asks to apply the migrations. The start-up list must show `
 
 1. **Admin → Textbooks → Shared content store:** the local book is listed as *Not imported* → **Import**. It takes a few seconds and costs nothing (no OpenRouter calls; the chunks and vectors already exist). The book shows *Published v1 · imported from the shared store*.
 2. Open the book → **Institutions using this book:** tick your **staging** institution → **Save**.
-3. Check that processing is blocked: on the imported book there is no *Read all pages*; uploading a new PDF and pressing *Read all pages* says *processing is not enabled in this environment*. That's correct.
+3. Check that processing is blocked: the *Upload a textbook* card says **Process books on local, then import them here** (no upload form), and the imported book has no *Read all pages*. That's correct: nothing unprocessable can land in the shared store.
 4. **Platform wallet:** if it is empty, issue a small amount (e.g. ₹20) **To: Platform wallet** (Admin's questions are paid from it).
 5. **Ask (web):** any page → **Ask your textbook** → *What is goodwill?* The answer streams in with page badges. Ask it again: *Saved answer · free*. Try *Who won the 2011 World Cup?*: *Not in your textbook*. **Expand** widens the drawer.
 6. **Ask (phone):** `pnpm dev:mobile:staging` in Terminal 2, sign in as the staging **student** → **Learn** tab → ask a question. It is charged to the student's class wallet (then their own), so the student needs credits from Phase 1 (or give some from the teacher first).
@@ -223,5 +223,5 @@ For reference, or to rebuild it:
 | Phone shows "Local server" while testing staging | Stop Terminal 2 and run `pnpm dev:mobile:staging`. |
 | A new feature fails only on staging | Usually a missing secret ([§4](#4-secrets--config)) or a migration not applied (re-run `pnpm deploy:staging`). |
 | Textbooks: *Shared content store* is empty | The book isn't **published** on local yet (publish it there first), or the deploy didn't happen. |
-| Textbooks: "processing is not enabled in this environment" | Expected: books are processed on local only. Use **Import** under *Shared content store*. |
+| Textbooks: "Process books on local, then import them here" | Expected: staging refuses uploads and processing. Upload + publish on local, then **Import** under *Shared content store*. |
 | Ask: "No textbook is set up for you yet" | Import the book on staging, and tick the staging institution under *Institutions using this book*. |

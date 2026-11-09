@@ -34,6 +34,13 @@ export function BooksPage() {
     queryKey: ['books', 'shared'],
     queryFn: () => api<SharedBook[]>('/admin/books/shared'),
   });
+  // Staging has no processing: books are processed on local and imported here.
+  const settings = useQuery({
+    queryKey: ['books', 'settings'],
+    queryFn: () => api<{ processingEnabled: boolean }>('/admin/books/settings'),
+    staleTime: Infinity,
+  });
+  const canProcess = settings.data?.processingEnabled;
 
   const [form, setForm] = useState({ title: '', offeringId: '', edition: '' });
   const [file, setFile] = useState<File | null>(null);
@@ -115,53 +122,64 @@ export function BooksPage() {
         </Card>
 
         <Card title="Upload a textbook (PDF)">
-          <form onSubmit={onUpload} className="flex flex-col gap-3">
-            <Field label="PDF file">
-              <Input
-                type="file"
-                accept="application/pdf"
-                required
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-            </Field>
-            <Field label="Title">
-              <Input
-                required
-                placeholder="NCERT Accountancy Class 12 Part I"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-              />
-            </Field>
-            <Field label="Board · class · subject">
-              <Select
-                required
-                value={form.offeringId}
-                onChange={(e) => setForm({ ...form, offeringId: e.target.value })}
-              >
-                <option value="">Choose…</option>
-                {offerings.data?.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.board.code} · {o.level.name} · {o.subject.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Edition (optional)">
-              <Input
-                placeholder="2024-25 reprint"
-                value={form.edition}
-                onChange={(e) => setForm({ ...form, edition: e.target.value })}
-              />
-            </Field>
-            <ErrorText error={upload.error ? errorMessage(upload.error) : null} />
-            <Button type="submit" disabled={upload.isPending || !file}>
-              {upload.isPending ? 'Uploading…' : 'Upload'}
-            </Button>
-            <p className="text-sm text-muted">
-              Uploading costs nothing. Processing (on the book's page) reads every page with OCR,
-              about US$0.0022 per page, paid from the platform wallet.
+          {canProcess === false && (
+            <p className="text-sm">
+              <strong>Process books on local, then import them here.</strong>{' '}
+              <span className="text-muted">
+                This environment doesn't read PDFs. Upload and publish the book on local; it then
+                appears under <em>Shared content store</em> below with an <em>Import</em> button.
+              </span>
             </p>
-          </form>
+          )}
+          {canProcess && (
+            <form onSubmit={onUpload} className="flex flex-col gap-3">
+              <Field label="PDF file">
+                <Input
+                  type="file"
+                  accept="application/pdf"
+                  required
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              </Field>
+              <Field label="Title">
+                <Input
+                  required
+                  placeholder="NCERT Accountancy Class 12 Part I"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                />
+              </Field>
+              <Field label="Board · class · subject">
+                <Select
+                  required
+                  value={form.offeringId}
+                  onChange={(e) => setForm({ ...form, offeringId: e.target.value })}
+                >
+                  <option value="">Choose…</option>
+                  {offerings.data?.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.board.code} · {o.level.name} · {o.subject.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Edition (optional)">
+                <Input
+                  placeholder="2024-25 reprint"
+                  value={form.edition}
+                  onChange={(e) => setForm({ ...form, edition: e.target.value })}
+                />
+              </Field>
+              <ErrorText error={upload.error ? errorMessage(upload.error) : null} />
+              <Button type="submit" disabled={upload.isPending || !file}>
+                {upload.isPending ? 'Uploading…' : 'Upload'}
+              </Button>
+              <p className="text-sm text-muted">
+                Uploading costs nothing. Processing (on the book's page) reads every page with OCR,
+                about US$0.0022 per page, paid from the platform wallet.
+              </p>
+            </form>
+          )}
         </Card>
       </div>
 

@@ -43,12 +43,21 @@ async function getBook(db: Db, id: string) {
   return b;
 }
 
+/**
+ * Books are processed only where the ingestion Workflow is bound (LOCAL; tests run it inline).
+ * Elsewhere (staging) uploads are refused too, so no unprocessable PDF lands in the shared,
+ * add-only content store; books are imported from that store instead.
+ */
+export const processingEnabled = (env: Pick<Env, 'APP_ENV' | 'INGEST_BOOK'>) =>
+  env.APP_ENV === 'test' || !!env.INGEST_BOOK;
+export const PROCESS_ON_LOCAL = 'Process books on local, then import them here.';
+
 /** Starts ingestion in a durable Workflow; tests (no Workflow) run it inline. */
 async function startIngest(env: Env, db: Db, params: IngestParams) {
   if (env.APP_ENV === 'test' || !env.INGEST_BOOK) {
     if (env.APP_ENV !== 'test')
       throw badRequest(
-        'Textbook processing is not enabled in this environment. Import the book instead.',
+        `Textbook processing is not enabled in this environment. ${PROCESS_ON_LOCAL}`,
       );
     await runIngest(env, db, params, inlineSteps);
     return null;
@@ -79,9 +88,13 @@ bookRoutes.get('/', async (c) => {
   );
 });
 
+/** What this environment can do (the web page hides the upload form where it can't process). */
+bookRoutes.get('/settings', (c) => c.json({ processingEnabled: processingEnabled(c.env) }));
+
 /** Upload a PDF (multipart: file, title, offeringId, edition?, language?). */
 bookRoutes.post('/', async (c) => {
   const { db, user: me } = c.var;
+  if (!processingEnabled(c.env)) throw badRequest(PROCESS_ON_LOCAL);
   const form = await c.req.parseBody();
   const file = form.file;
   if (!(file instanceof File)) throw badRequest('Choose a PDF file');

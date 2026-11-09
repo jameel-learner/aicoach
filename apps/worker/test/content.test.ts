@@ -3,6 +3,8 @@ import { PDFDocument } from 'pdf-lib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chunkPages, pageFlags } from '../src/content/chunk';
 import { withFigureDescriptions } from '../src/content/ingest';
+import type { Env as AppEnv } from '../src/env';
+import { PROCESS_ON_LOCAL, processingEnabled } from '../src/routes/books';
 import { testVectors } from '../src/content/store';
 import { clearRegistryCache } from '../src/llm/registry';
 import { call, createSignedInUser, json, seedPilotTaxonomy, type Jar } from './helpers';
@@ -250,6 +252,19 @@ describe('textbook ingestion (shared content store)', () => {
     expect(
       (await call('POST', `/api/admin/books/${id}/parse`, { jar: admin.jar, body: {} })).status,
     ).toBe(400);
+  });
+});
+
+describe('where books can be processed', () => {
+  it('only where the ingestion Workflow is bound (local) or in tests; staging refuses uploads', async () => {
+    const workflow = {} as NonNullable<AppEnv['INGEST_BOOK']>;
+    expect(processingEnabled({ APP_ENV: 'staging', INGEST_BOOK: undefined })).toBe(false);
+    expect(processingEnabled({ APP_ENV: 'development', INGEST_BOOK: workflow })).toBe(true);
+    expect(processingEnabled({ APP_ENV: 'test', INGEST_BOOK: undefined })).toBe(true);
+    expect(PROCESS_ON_LOCAL).toBe('Process books on local, then import them here.');
+    const admin = await createSignedInUser('admin');
+    const res = await call('GET', '/api/admin/books/settings', { jar: admin.jar });
+    expect(await json(res)).toEqual({ processingEnabled: true });
   });
 });
 
