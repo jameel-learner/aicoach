@@ -64,7 +64,9 @@ export function BookPage() {
   if (q.error) return <ErrorText error={errorMessage(q.error)} />;
   if (!q.data) return <p className="text-muted">Loading…</p>;
   const { book, pages, parseCostUsdNano } = q.data;
-  const busy = BUSY.includes(book.status);
+  // A run that stopped (no progress for 10 min, e.g. the server restarted) can be continued.
+  const stalled = q.data.stalled;
+  const busy = BUSY.includes(book.status) && !stalled;
   const imported = book.source === 'imported';
   const notReady = pages.filter((p) => p.status === 'pending' || p.status === 'failed').length;
   const flagged = pages.filter((p) => p.status === 'failed' || (p.flags?.length ?? 0) > 0);
@@ -89,16 +91,23 @@ export function BookPage() {
           {!imported && (
             <>
               <Button
-                disabled={busy || action.isPending || book.status === 'publishing'}
+                disabled={busy || action.isPending || (book.status === 'publishing' && !stalled)}
                 onClick={() => action.mutate('parse')}
               >
-                {notReady === book.pageCount
-                  ? 'Read all pages'
-                  : `Read remaining pages (${notReady})`}
+                {stalled && book.status !== 'publishing'
+                  ? `Continue reading (${notReady} left)`
+                  : notReady === book.pageCount
+                    ? 'Read all pages'
+                    : `Read remaining pages (${notReady})`}
               </Button>
               <Button
                 variant="secondary"
-                disabled={busy || action.isPending || notReady > 0}
+                disabled={
+                  busy ||
+                  action.isPending ||
+                  notReady > 0 ||
+                  (stalled && book.status !== 'publishing')
+                }
                 onClick={() => action.mutate('publish')}
               >
                 {book.publishedVersion ? 'Publish new version' : 'Publish'}
@@ -109,6 +118,14 @@ export function BookPage() {
             </>
           )}
         </div>
+        {stalled && (
+          <p className="mt-3 text-warning">
+            {book.status === 'publishing' ? 'Publishing' : 'Reading'} stopped: no progress for over
+            10 minutes (for example, the server was restarted). Pages already done are kept; press{' '}
+            <strong>{book.status === 'publishing' ? 'Publish' : 'Continue reading'}</strong> to
+            carry on.
+          </p>
+        )}
         {book.statusMessage && <p className="mt-3 text-warning">{book.statusMessage}</p>}
         <ErrorText error={action.error ? errorMessage(action.error) : null} />
         {!imported && (

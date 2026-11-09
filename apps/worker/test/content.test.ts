@@ -268,6 +268,51 @@ describe('where books can be processed', () => {
   });
 });
 
+describe('a run that stopped (e.g. the dev server reloaded mid-reading)', () => {
+  it('is shown as stalled after 10 minutes without progress and can be continued', async () => {
+    const offeringId = await seedPilotTaxonomy();
+    const admin = await createSignedInUser('admin');
+    await call('POST', '/api/admin/models/sync', { jar: admin.jar });
+    await call('POST', '/api/admin/credits/issue', {
+      jar: admin.jar,
+      body: { target: { type: 'platform' }, credits: '5' },
+    });
+    const { id } = await json(await upload(admin.jar, offeringId, 2));
+    // The run "died" while parsing: status says parsing, page 1 done, page 2 pending.
+    const at = async (ms: number) => {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE books SET status = 'parsing', updated_at = ? WHERE id = ?").bind(
+          ms,
+          id,
+        ),
+        env.DB.prepare(
+          "UPDATE book_pages SET status = 'parsed', markdown = 'Done before.', updated_at = ? WHERE book_id = ? AND page_no = 1",
+        ).bind(ms, id),
+        env.DB.prepare(
+          'UPDATE book_pages SET updated_at = ? WHERE book_id = ? AND page_no = 2',
+        ).bind(ms, id),
+      ]);
+    };
+    const view = async () => json(await call('GET', `/api/admin/books/${id}`, { jar: admin.jar }));
+    const parse = () => call('POST', `/api/admin/books/${id}/parse`, { jar: admin.jar, body: {} });
+
+    await at(Date.now() - 60_000); // 1 minute ago: still running
+    expect((await view()).stalled).toBe(false);
+    expect((await parse()).status).toBe(409);
+
+    await at(Date.now() - 11 * 60_000); // 11 minutes without progress: stopped
+    expect((await view()).stalled).toBe(true);
+    expect((await parse()).status).toBe(202);
+    const after = await view();
+    expect(after.book.status).toBe('review');
+    expect(after.stalled).toBe(false);
+    // Only the missing page was read again; page 1 kept its text
+    expect(or.parsedFiles).toEqual(['page-2.pdf']);
+    const p1 = await json(await call('GET', `/api/admin/books/${id}/pages/1`, { jar: admin.jar }));
+    expect(p1.markdown).toBe('Done before.');
+  });
+});
+
 describe('large uploads', () => {
   it('uploads a book-sized PDF (page rows stay under the D1 parameter limit)', async () => {
     const offeringId = await seedPilotTaxonomy();

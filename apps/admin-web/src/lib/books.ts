@@ -41,6 +41,8 @@ export interface BookDetail {
   pages: PageSummary[];
   institutions: { id: string; name: string }[];
   parseCostUsdNano: number;
+  /** Busy, but no progress for 10 minutes: the run stopped (e.g. the server restarted). */
+  stalled: boolean;
 }
 
 export const BOOK_STATUS: Record<BookStatus, { label: string; tone?: 'good' | 'warn' }> = {

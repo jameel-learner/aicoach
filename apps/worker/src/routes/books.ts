@@ -52,6 +52,25 @@ export const processingEnabled = (env: Pick<Env, 'APP_ENV' | 'INGEST_BOOK'>) =>
   env.APP_ENV === 'test' || !!env.INGEST_BOOK;
 export const PROCESS_ON_LOCAL = 'Process books on local, then import them here.';
 
+const BUSY: string[] = ['splitting', 'parsing', 'publishing'];
+/** No progress for this long while "busy" = the run died (e.g. the local dev server reloaded). */
+export const STALL_MS = 10 * 60_000;
+
+/**
+ * A busy book whose last progress (book or any page row) is older than STALL_MS. Such a run can be
+ * started again: reading skips pages already done, publishing rewrites its unfinished version.
+ */
+export async function isStalled(db: Db, book: typeof books.$inferSelect, now = Date.now()) {
+  if (!BUSY.includes(book.status)) return false;
+  const last = await db
+    .select({ t: sql<number | null>`max(${bookPages.updatedAt})` })
+    .from(bookPages)
+    .where(eq(bookPages.bookId, book.id))
+    .get();
+  const lastMs = Math.max(book.updatedAt.getTime(), Number(last?.t ?? 0));
+  return now - lastMs > STALL_MS;
+}
+
 /** Starts ingestion in a durable Workflow; tests (no Workflow) run it inline. */
 async function startIngest(env: Env, db: Db, params: IngestParams) {
   if (env.APP_ENV === 'test' || !env.INGEST_BOOK) {
@@ -173,7 +192,13 @@ bookRoutes.get('/:id', async (c) => {
     .innerJoin(institutions, eq(institutions.id, institutionBooks.institutionId))
     .where(eq(institutionBooks.bookId, book.id));
   const cost = pages.reduce((s, p) => s + p.costUsdNano, 0);
-  return c.json({ book, pages, institutions: mapped, parseCostUsdNano: cost });
+  return c.json({
+    book,
+    pages,
+    institutions: mapped,
+    parseCostUsdNano: cost,
+    stalled: await isStalled(db, book),
+  });
 });
 
 bookRoutes.post('/:id/parse', async (c) => {
@@ -181,7 +206,7 @@ bookRoutes.post('/:id/parse', async (c) => {
   const book = await getBook(db, c.req.param('id'));
   if (book.source === 'imported')
     throw badRequest('Imported books are processed where they were uploaded');
-  if (['splitting', 'parsing', 'publishing'].includes(book.status))
+  if (BUSY.includes(book.status) && !(await isStalled(db, book)))
     throw conflict('This book is already being processed');
   const workflowId = await startIngest(c.env, db, {
     bookId: book.id,
@@ -196,7 +221,8 @@ bookRoutes.post('/:id/publish', async (c) => {
   const book = await getBook(db, c.req.param('id'));
   if (book.source === 'imported')
     throw badRequest('Imported books are published where they were uploaded');
-  if (book.status !== 'review' && book.status !== 'published')
+  const stalledPublish = book.status === 'publishing' && (await isStalled(db, book));
+  if (book.status !== 'review' && book.status !== 'published' && !stalledPublish)
     throw conflict('Parse and review the book before publishing');
   const notReady = await db
     .select({ n: sql<number>`count(*)` })
