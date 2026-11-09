@@ -67,6 +67,7 @@ import { creditsReceivedEmail } from '../lib/emails';
 import { badRequest, conflict, forbidden, notFound, parseBody } from '../lib/http';
 import type { Notifier } from '../lib/notifier';
 import { fetchAccountBalance } from '../llm/openrouter';
+import { reconciliationSummary } from '../credits/reconcile';
 import { requireAuth, requireRole } from '../middleware/session';
 
 function toMicro(credits: string) {
@@ -475,6 +476,7 @@ adminCreditRoutes.get('/float', async (c) => {
     openRouterError,
     shortfallUsdNano: openRouter ? Math.max(0, requiredUsdNano - openRouter.balanceUsdNano) : null,
     warning: openRouter ? openRouter.balanceUsdNano < requiredUsdNano : null,
+    reconciliation: await reconciliationSummary(db),
     lifetime: {
       rawUsdNano: Number(usage?.raw ?? 0),
       billedMicro: Number(usage?.billed ?? 0),

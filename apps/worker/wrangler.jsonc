@@ -26,6 +26,18 @@
       "migrations_dir": "../../packages/db/migrations",
     },
   ],
+  // Shared textbook content store (architecture §3.3, decision 9.4-1): the SAME index and bucket for
+  // LOCAL and STAGING, so a PDF is processed once. LOCAL reaches them remotely. Only ever add to them.
+  "vectorize": [
+    { "binding": "CONTENT_VECTORS", "index_name": "aicoach-content-chunks", "remote": true },
+  ],
+  "r2_buckets": [{ "binding": "CONTENT", "bucket_name": "aicoach-content", "remote": true }],
+  // Workers AI (embeddings @cf/baai/bge-m3, reranker); always runs on Cloudflare, even locally.
+  "ai": { "binding": "AI", "remote": true },
+  // Textbook ingestion runs as a durable Workflow (LOCAL: where books are processed).
+  "workflows": [
+    { "name": "aicoach-ingest-book", "binding": "INGEST_BOOK", "class_name": "IngestBookWorkflow" },
+  ],
   "vars": {
     "APP_ENV": "development",
     "APP_URL": "http://localhost:8787",
@@ -50,6 +62,9 @@
           "migrations_dir": "../../packages/db/migrations",
         },
       ],
+      "vectorize": [{ "binding": "CONTENT_VECTORS", "index_name": "aicoach-content-chunks" }],
+      "r2_buckets": [{ "binding": "CONTENT", "bucket_name": "aicoach-content" }],
+      "ai": { "binding": "AI" },
       "vars": {
         "APP_ENV": "staging",
         "APP_URL": "https://aicoach-api-staging.jameel-outskill.workers.dev",

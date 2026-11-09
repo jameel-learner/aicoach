@@ -24,7 +24,8 @@ const EnrolmentContext = createContext<Ctx>({ enrolments: [], active: null, setA
 /** Which enrolment (institution × class × subject) the learner is currently studying in (spec 4.2.1). */
 export function EnrolmentProvider({ children }: { children: ReactNode }) {
   const { data: me } = useMe();
-  const enrolments = me?.enrolments ?? [];
+  // Memoised: a fresh [] each render would change the context value and re-render every consumer.
+  const enrolments = useMemo(() => me?.enrolments ?? [], [me?.enrolments]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {

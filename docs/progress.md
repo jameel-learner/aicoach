@@ -7,11 +7,11 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 2: Textbook ingestion & grounded Q&A (🟡 starting: checklist below; open questions under *Pending confirmations*) |
+| **Current phase** | Phase 2: Textbook ingestion & grounded Q&A: **signed off on LOCAL by the user 2026-11-09**, committed; staging deploy + test ([staging.md §3c](environments/staging.md#3c-phase-2-on-staging-textbooks--ask)) is the last step. Phase 3 starts after that |
 | **Last updated** | 2026-11-09 |
-| **Build / tests** | All green: typecheck, 41 worker + 8 core tests (`pnpm test`), 4 Playwright browser tests (`test:e2e`, incl. credits, request and teacher-buy flows; test data removed afterwards), Android bundle builds |
+| **Build / tests** | All green: typecheck, lint, 54 worker + 8 core tests (`pnpm test`), 4 Playwright browser tests (`test:e2e`; test data removed afterwards), web build, Android bundle builds |
 | **Blockers** | None |
-| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live with Phase 1, commit `4a2509b`; codes via `pnpm logs:staging`) |
+| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live with Phase 1, commit `4a2509b`; Phase 2 deploy pending, see staging.md §3c; codes via `pnpm logs:staging`) |
 
 Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria passed + user sign-off) · ⛔ blocked
 
@@ -25,7 +25,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 | Android phone with Expo Go (connects by QR code on the same Wi-Fi) | Phase 0 mobile shell | ✅ |
 | OpenRouter API key: stored in `apps/worker/.dev.vars` (local). The user chose to keep the key shared in chat (not rotated). Same key set as staging secret on 2026-11-09 | Phase 1 | ✅ local · ✅ staging |
 | NCERT Accountancy PDFs: `docs/textbooks/accountancy_1.pdf` (~204 pp), `accountancy_2.pdf` (~296 pp). Git-ignored | Phase 2 | ✅ |
-| KSEAB 2nd PUC Accountancy blueprint / model papers / marking scheme | Phase 3 | ⬜ |
+| KSEAB 2nd PUC Accountancy blueprint / model papers / marking scheme: `docs/textbooks/30_ACCOUNTANCY_BP.pdf` + `30_ACCOUNTANCY_MQP_1..5.pdf` (also BP for Economics, Business Studies, Computer Science; MQP for Economics). Marking scheme not seen yet | Phase 3 | 🟡 blueprint + model papers present |
 
 ## Phase overview
 
@@ -92,31 +92,54 @@ Commits `c3a51f9` (phase) + `4a2509b` (class-teacher reassignment). Backend: **1
 - **Deferred to Phase 2:** streaming responses; generation-endpoint reconciliation cron; eval scores on the Models screen. **Deferred (no phase yet):** usage roll-up table (live aggregates are fast enough at pilot scale); low-balance alert emails.
 - **Staging (done 2026-11-09):** `OPENROUTER_API_KEY` secret set; `pnpm deploy:staging` applied migration 0001; models synced; user walked through the 13-step credits & AI flow on staging.
 
-### Phase 2: Textbook ingestion & grounded Q&A 🟡 (started 2026-11-09)
+### Phase 2: Textbook ingestion & grounded Q&A ✅ on LOCAL (user sign-off 2026-11-09; staging test pending)
 Pilot book: NCERT Accountancy Class 12, Parts I & II (`docs/textbooks/accountancy_1.pdf`, `accountancy_2.pdf`).
 
 **Carried over / housekeeping**
-- [ ] ESLint (typescript-eslint + react-hooks), deferred from Phase 0 "before Phase 2"
-- [ ] Streaming in `runMeteredChat` (SSE to web/mobile), settle from the final chunk's `usage.cost`; client abort still settles (from Phase 1)
-- [ ] Reconciliation cron vs OpenRouter generation stats, `adjust` ledger entries; exit: difference < 0.5% (from Phase 1)
+- [x] ESLint 10 flat config at root (`eslint.config.mjs`: typescript-eslint, react-hooks), `pnpm lint` (max 0 warnings), added to CI. Fixed: untyped OpenRouter response (`any`), enrolment context re-rendering every consumer (unmemoised `[]`)
+- [x] Streaming in `runMeteredChat` (`onDelta`; OpenRouter SSE read to the end, cost from the final chunk). `/api/ask` streams SSE and settles via `waitUntil` even if the client disconnects
+- [x] Reconciliation (hourly cron, `src/credits/reconcile.ts`): OpenRouter `/generation` cost vs charged, `adjust` ledger entries at the call's own rate + fee; float panel shows the 30-day difference %. Exit check (< 0.5%) after real usage
 
 **Ingestion**
-- [ ] Schema: `books`, `book_pages`, `chunks` (+ FTS5), `institution_books` (decision 9.2-1), `ingest_jobs`
-- [ ] Admin: upload PDF to R2, link to board/level/subject; map institutions to books (select existing or upload new)
-- [ ] `IngestBook` Workflow: OpenRouter PDF parse (per page Markdown) → figure descriptions → structure (chapters/sections) → QA gate → chunk → embed (Workers AI) → Vectorize + FTS5. Charged to the platform wallet
-- [ ] Admin parse-review screen (page image vs Markdown, edit/approve)
+- [x] Shared content store created (decision 9.4-1): Vectorize `aicoach-content-chunks` (1024 dims, cosine, metadata index `book`), R2 `aicoach-content`; bindings `CONTENT_VECTORS`, `CONTENT`, `AI` in wrangler.jsonc (LOCAL `remote: true`, staging same names). Tests run with `remoteBindings: false`
+- [x] Parse trial (5 pages of accountancy_1, pages split out with `pdf-lib`, OpenRouter `file-parser` plugin; parsed text returned in `choices[0].message.annotations[].file.content`): **mistral-ocr** keeps balance-sheet tables as Markdown tables and headings, ~US$0.0022/page, ~2.2 s/page; **cloudflare-ai** (free) flattens tables and glues numbers together (unusable for Accountancy). → Use mistral-ocr; both books (500 pages) ≈ **US$1.10 (≈ ₹97)**, one time
+- [x] Migration `0002_phase2_books`: `books`, `book_pages`, `chunks`, `institution_books` + hand-written FTS5 `chunks_fts`
+- [x] LLM path: OpenRouter `plugins` + parsed text from file annotations (`fileText`), hold covers the per-page OCR fee (`extraEstimateUsdNano`)
+- [x] `src/content/`: `store.ts` (shared R2/Vectorize/embeddings; in-memory fakes in tests), `chunk.ts` (page-bound chunks, tables kept whole, running headers dropped, quality flags), `ingest.ts` (split → parse → publish as named steps), `import.ts`, `workflow.ts` (`IngestBookWorkflow`, binding `INGEST_BOOK`, LOCAL only)
+- [x] Book packages in R2 (`books/<id>/<version>/manifest.json, pages.jsonl, chunks.jsonl` + `catalog/<id>.json`); versions are new ids in Vectorize (append-only)
+- [x] Admin API `/api/admin/books` (upload, parse, publish, page view/PDF/edit/approve/re-parse, shared list + import, institution mapping)
+- [x] Admin web: *Textbooks* (upload, progress, shared-store import) and book review (page grid with flags, PDF page beside its text, edit/approve/re-read, publish, institutions)
+- [x] Tests: `test/content.test.ts` (chunking, flags, full upload → parse → review → publish v1/v2 → import elsewhere, credit stop, admin-only)
+- [x] Figure descriptions: pages whose OCR text has image placeholders get a second call (task `figure_description`, platform wallet) and the placeholders are replaced by "**Figure:** …" text
+- [ ] Chapter list (structure) beyond per-chunk section headings: not needed for Q&A; revisit in Phase 3 (notes per chapter)
+- [ ] Real run on LOCAL: NCERT Part I and II through the UI (≈ US$1.10), spot-check review
 
 **Q&A**
-- [ ] Retrieval: hybrid (Vectorize + FTS5), rerank, enrolment/institution scoping, citation packaging, citation verifier
-- [ ] Semantic answer cache + "force new answer" variants (metered to the student's wallet)
-- [ ] Prompt registry with versions
-- [ ] Mobile "Ask your textbook": answer-first streaming, tables, KaTeX formulas, tappable citation badges, ⚠ "not in your textbook" / uncertainty flag, syllabus-scope badge
+- [x] Scope (`src/content/scope.ts`): student → institution's mapped books for the enrolment's subject (fallback: all published for the subject), pays class wallet then own; teacher → class books, class wallet then own; POC → institution books + wallet; Admin → all, platform wallet
+- [x] Retrieval (`src/content/retrieve.ts`): Vectorize (shared) + FTS5 (local), reciprocal-rank fusion, Workers AI `bge-reranker-base`, top 6 sources
+- [x] Answering (`src/content/answer.ts`, prompt `tutor_answer@1` in `src/llm/prompts.ts`): answer-first, excerpts only, `[S#]` citations, `NOT_IN_TEXTBOOK:` marker (never shown), citation verifier (unknown sources dropped, weak support flagged → "uncertain")
+- [x] Answer cache (`answers` table, migration 0003): same scope + same/similar question (bge-m3 cosine ≥ 0.92) → stored answer, free; "Get a new answer" → new variant (charged)
+- [x] API `/api/ask` (SSE: meta → delta* → done | error; `stream:false` JSON) and `/api/ask/scope`
+- [x] Web: floating **Ask your textbook** button on every signed-in page → right-hand drawer over the page, expandable, streamed Markdown with tables, page badges with source snippet, ⚠ not-in-book / uncertain notes, "Get a new answer", class picker for teachers
+- [x] Mobile: Learn tab is now "Ask your textbook" (`expo/fetch` streaming, own Markdown renderer with tables + page badges, same flags). Formulas are plain text by prompt design (no KaTeX on the phone)
+- [x] Tests: `test/ask.test.ts` (streamed cited answer + charge, cache hit free, force-new variant, not-in-book, uncertain, credit error event, role scoping, reconciliation adjust + ledger invariant, citation verifier, eval endpoints)
+
+**Enrolments**
+- [x] Admin can remove a learner from a class / self-study subject (decision 9.4-2; Admin → Users → *Classes & subjects*); re-joining reactivates; test in `credits.test.ts`
 
 **Evaluation**
-- [ ] Eval harness v1 (`evals/`): 50+ golden questions on NCERT Accountancy (concept text, journal entries, ledger/balance-sheet tables, ratio formulas, figures, 2-column pages); runs per registry model; scores shown on the Admin Models screen
+- [x] Eval harness v1: `evals/golden/ncert-accountancy.jsonl` (55 questions with expected pages + reference answers from the PDFs: 21 Part I, 31 Part II, 3 off-syllabus), `evals/run.mjs` (LOCAL, Admin sign-in, fresh answers, optional `--model`), judge endpoint (task `eval_judge`), runs stored (`eval_runs`) and shown on Admin → AI models
+- [ ] Run the evals after the real ingestion; add journal-entry / table / figure questions once the parsed pages are reviewed
 
-- [ ] **Exit:** parsing fixtures pass (multi-column order, LaTeX, tables); golden-set citation accuracy ≥ 90%, answer correctness ≥ 85% (judge + human sample); cache hit < 300 ms; force-new creates a variant; streaming + reconciliation < 0.5% (carried); user sign-off
-- **Phase-end staging steps (planned, refine during the phase):** create staging R2 bucket and Vectorize index (`wrangler r2 bucket create …`, `wrangler vectorize create … --dimensions <model dims> --metric cosine`) and add their bindings + Workers AI + Workflow under `env.staging` in wrangler.jsonc; `pnpm deploy:staging` (applies the Phase 2 migration); upload the two NCERT PDFs on staging and run ingestion there (charged to the staging platform wallet, ~US$ estimate recorded during the phase); likely **Workers Paid** (US$5/month) first because ingestion and streaming exceed the free 10 ms CPU limit
+- [x] **Exit (measured on LOCAL 2026-11-09; user accepted the phase with the gaps below):**
+  - Reconciliation: 291 real calls checked against OpenRouter `/generation`: **0.0% difference** (target < 0.5%) ✅
+  - Cache hit: **28–34 ms** (target < 300 ms) ✅, after making exact matches skip the question embedding (was 176–405 ms)
+  - Force-new creates a variant ✅ (tests + walkthrough); streaming ✅ (web + phone)
+  - Golden set, Part I + not-in-book (24 questions, gpt-4o-mini): **correctness 91.7%** ✅, **citation 87.5%** (target 90%; ≈ 92% with the corrected p1-16 item, not re-run yet)
+  - Tables parse as Markdown tables ✅ (mistral-ocr; reviewed by the user). Parsing "fixtures" were replaced by the real-book review
+  - User sign-off on LOCAL ✅ (2026-11-09)
+- **Carried into Phase 3 (accepted by the user):** upload + publish **Part II** on LOCAL (then *Import* it on staging) and re-run the evals on both books with the registry model; the two real citation misses (p1-15, p1-18); LaTeX in parsed pages (`$\frac{1}{5}$`) isn't rendered on web/phone; add journal-entry / table / figure golden questions
+- **Phase-end staging steps (final, see [staging.md §3c](environments/staging.md#3c-phase-2-on-staging-textbooks--ask)):** no new secrets and no new Cloudflare resources (the shared Vectorize index + R2 bucket and Workers AI are already bound under `env.staging`). **No Workflow on staging on purpose:** books are processed only on LOCAL; on staging *Read all pages* answers \"Textbook processing is not enabled in this environment. Import the book instead.\" `pnpm deploy:staging` applies migrations 0002 + 0003; then Admin → Textbooks → **Import** (free, no OpenRouter calls), map the staging institution, try Ask on web + phone. Workers Paid only if the import or Ask hits error 1102 (CPU limit)
 
 ### Phases 3–9 ⬜
 Checklists are expanded from architecture §7 when the phase starts.
@@ -131,12 +154,15 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Staging uses Cloudflare's Turnstile **test** keys (no bot protection). Create a real widget before the pilot.
 - Free-plan CPU: measured on staging, warm requests 1 to 14 ms, sign-in ~45 ms (PBKDF2), cold starts up to ~100 ms; limit is 10 ms. All succeeded, but move to Workers Paid (US$5/month) before real users. Phase 2 (streaming + ingestion) is the natural point.
 - Low-balance alert emails (architecture §6.6 views) not built yet; balances and requests cover the pilot flow.
+- Parsed pages keep formulas as LaTeX (`$\frac{1}{5}$`). The web drawer and phone show answers as Markdown without a LaTeX renderer, so a copied formula appears raw. Phase 3: render it (KaTeX on web; plain-text conversion or a renderer on the phone).
+- Only NCERT Accountancy **Part I** is processed. Part II questions answer "not in your textbook" until it is uploaded and published on LOCAL (and imported on staging).
+- Scheduled jobs don't run by themselves under `wrangler dev`: trigger the hourly job (holds + reconciliation) with `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`.
 
 ## Pending confirmations
 
-- **Phase 2, Vectorize for LOCAL development:** Vectorize has no local simulator. Proposal: a separate **dev** index (`aicoach-dev-chunks`) on the Cloudflare account, bound with `remote: true` in the dev config only. It is not staging and holds only local test vectors. Needs the user's OK because it creates a Cloudflare resource during the phase.
-- **Phase 2, ingestion cost:** parsing ~500 pages through OpenRouter (PDF/OCR + figure descriptions) costs real credit; estimate to be measured on 5 pages first and confirmed before a full-book run.
-- **Phase 2, Workers Paid:** needed before staging ingestion/streaming (free plan 10 ms CPU). Decision at phase end.
+- *(Resolved 2026-11-09, decision 9.4-1: one shared content store for LOCAL + STAGING.)*
+- *(Resolved 2026-11-09: ingestion cost measured (≈ US$0.0022/page, mistral-ocr) and approved by the user; Part I cost ≈ US$0.46.)*
+- **Workers Paid (US$5/month):** not needed for the Phase 2 staging test (no ingestion on staging; streaming waits on the network, not CPU). Upgrade if staging shows error 1102, and before real users.
 - *(Resolved: allotment lifecycle confirmed 2026-11-08.)*
 
 ## Session log
@@ -194,3 +220,27 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Exit criteria recorded above; streaming and OpenRouter reconciliation moved to Phase 2 with sign-off.
 - Docs closed out: progress.md (Phase 1 ✅, Phase 2 checklist + planned staging steps + pending confirmations), architecture §7 (Phase 1 status, carried items in Phase 2), staging.md (live version), CLAUDE.md (repository map: real vs planned folders).
 - Next: Phase 2. First steps: ESLint, then schema + R2 upload + ingestion of a few pages to measure cost, once the Vectorize dev-index question is answered.
+
+### 2026-11-09 (Phase 2 start: shared content store)
+- User decision 9.4-1: one **shared** Vectorize + R2 for LOCAL and STAGING so each PDF is processed once. Recorded in architecture §3.3 + §9.4, CLAUDE.md (exception to the environment rule), setup-and-deployment.md, memory.
+- Created on Cloudflare: Vectorize `aicoach-content-chunks` (1024 dims, cosine; metadata index `book`), R2 bucket `aicoach-content`. Embeddings model chosen: `@cf/baai/bge-m3` (multilingual); reranker `@cf/baai/bge-reranker-base`.
+- Bindings added (`CONTENT_VECTORS`, `CONTENT`, `AI`); typecheck + 41 worker tests green. Not committed (mid-phase).
+- Next: ESLint, then Phase 2 schema + R2 upload + 5-page parse to measure cost.
+- ESLint added and clean; CI runs it. Parse trial done (see Phase 2 checklist): mistral-ocr chosen, full NCERT run ≈ US$1.10 one time. Trial cost US$0.012.
+- Built ingestion (schema 0002, shared-store layer, chunker, parse/publish/import steps, Workflow, Admin API + screens). 44 worker tests green, lint clean. Not committed (mid-phase).
+
+### 2026-11-09 (Phase 2, part 3: Q&A, drawer, phone, evals)
+- Built streaming + reconciliation, scoping, hybrid retrieval + rerank, grounded answers with citation verifier, answer cache + force-new, `/api/ask` (SSE), web drawer (user request), phone Learn tab, figure descriptions, eval harness (55 golden questions) + Models screen scores. Migration 0003 (`answers`, `eval_runs`, `llm_usage.reconciled_*`).
+- Checks: 52 worker + 8 core tests, lint, typecheck, 4 E2E, Android bundle: all green. Not committed (mid-phase).
+- Waiting on the user: real ingestion of both NCERT books (local.md §3c), then try Ask on web + phone and run `node evals/run.mjs`.
+- Bug found in the user's first real upload (204-page Part I): `POST /api/admin/books` inserted 50 page rows per statement = 200 bound parameters → D1 "too many SQL variables" (limit 100), leaving a book row with no pages. Fixed: 20 rows per insert, and the book row + page rows go in one atomic `db.batch`. Regression test uploads a 296-page PDF. Orphan row removed from the local D1 (its original.pdf stays in the shared R2, per the add-only rule).
+- Bug found by the user in local.md §3c step 9 (web drawer): "l is not a function" after asking. Cause: `useEffect(() => bottom.current?.scrollIntoView(...))` returned scrollIntoView's value (a Promise in current Chrome) as the effect cleanup; React then called it. Fixed with a block body (same pattern tidied in BookPage). Reproduced and verified with a throwaway Playwright run against the LOCAL server (test account removed by the cleanup).
+- User walkthrough: student with a class + a self-study enrolment got "Join a class or choose a subject first" on the phone, though both enrolments are active and the server answers correctly for both (reproduced with a test student). Most likely the phone sent a remembered enrolment id that isn't the student's (the same phone was signed in as a teacher before). Server now falls back to the student's first subject and logs `ask scope: enrolment … is not an active enrolment` in the worker terminal. If it recurs without that log line, investigate the phone side.
+- Added Admin removal of enrolments (decision 9.4-2) on request; 54 worker tests green, lint/format/web build green.
+- First real eval run (user, `--model openai/gpt-4o-mini`, Part I only published): reported 5.5% citation / 40% correctness, but both numbers were wrong because of the runner: (1) it identified books by "Part I/II" in the title, and the uploaded title says "Part 1", so every citation counted as the wrong book; (2) the 31 Part II questions were scored although Part II isn't uploaded yet. Fixed `evals/run.mjs` (accepts Part 1/I, 2/II; skips questions for unpublished books and says so). Re-scored from the saved results (no new calls): **Part I + not-in-book, 24 questions: citation 87.5%, correctness 91.7%**. Golden p1-16 (hidden goodwill) widened to both book sections (p.84 admission, p.128 retirement). Real misses left: p1-15 (cites p.63, not p.60), p1-18 (cites p.117, definition is on p.59). The wrong 5.5% run stays in `eval_runs` on the Models screen (history); the next run supersedes it.
+- Observation to check: parsed pages contain LaTeX (`$\frac{1}{5}$`); the web drawer and phone don't render LaTeX, so answers that copy it would show raw `$…$`.
+
+### 2026-11-09 (Phase 2 close on LOCAL)
+- User: "good to move ahead to next phase; commit and update documentation to cover staging". Measured the exit checks first: reconciliation over 291 real local calls 0.0% (hourly job triggered by hand); cache hit 176–405 ms → fixed (exact match no longer embeds the question; now 28–34 ms); eval figures as above. Gaps accepted and carried into Phase 3 (Part II, 2 citation misses, LaTeX rendering).
+- Staging plan finalised (staging.md §3c): no Workflow and no new secrets on staging; deploy, then Import the books from the shared store.
+- Committed Phase 2. Next: user runs staging.md §3c (deploy, import, test), then Phase 3.

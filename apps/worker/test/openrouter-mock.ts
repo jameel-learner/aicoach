@@ -11,6 +11,13 @@ export interface MockState {
   delayMs: number;
   requests: { model: string; models?: string[]; max_tokens: number }[];
   balanceUsd: { total: number; used: number };
+  /** file-parser plugin: the Markdown returned for an attached file (by filename, e.g. page-3.pdf). */
+  parseText: (filename: string) => string;
+  parsedFiles: string[];
+  /** The assistant's reply (streamed in pieces when the request asks for a stream). */
+  answer: string;
+  /** What OpenRouter's /generation endpoint reports later (reconciliation); default = costUsd. */
+  generationCostUsd: number | null;
 }
 
 export const MODELS = [
@@ -73,6 +80,12 @@ export function installOpenRouterMock(): MockState {
     delayMs: 0,
     requests: [],
     balanceUsd: { total: 10, used: 2 },
+    parseText: (filename) => `## Section of ${filename}
+
+Parsed text of ${filename}.`,
+    parsedFiles: [],
+    answer: 'mock answer',
+    generationCostUsd: null,
   };
   const realFetch = globalThis.fetch;
   vi.spyOn(globalThis, 'fetch').mockImplementation(
@@ -85,6 +98,9 @@ export function installOpenRouterMock(): MockState {
         return Response.json({
           data: { total_credits: state.balanceUsd.total, total_usage: state.balanceUsd.used },
         });
+      }
+      if (url.includes('/generation?id=')) {
+        return Response.json({ data: { total_cost: state.generationCostUsd ?? state.costUsd } });
       }
       if (url.endsWith('/chat/completions')) {
         const body = JSON.parse(String(init?.body ?? '{}'));
@@ -100,11 +116,61 @@ export function installOpenRouterMock(): MockState {
             { status: state.fail.status },
           );
         }
+        if (body.stream) {
+          const id = `gen-test-${state.requests.length}`;
+          const pieces = state.answer.match(/[\s\S]{1,12}/g) ?? [];
+          const lines = [
+            ': OPENROUTER PROCESSING',
+            ...pieces.map(
+              (p) =>
+                `data: ${JSON.stringify({ id, model: body.model, choices: [{ delta: { content: p } }] })}`,
+            ),
+            `data: ${JSON.stringify({ id, model: body.model, choices: [{ delta: {} }], usage: { prompt_tokens: 50, completion_tokens: 20, cost: state.costUsd } })}`,
+            'data: [DONE]',
+          ];
+          return new Response(lines.join('\n\n') + '\n\n', {
+            headers: { 'content-type': 'text/event-stream' },
+          });
+        }
+        // file-parser plugin: echo parsed text back as file annotations, like OpenRouter does.
+        const files: string[] = body.plugins?.length
+          ? (body.messages ?? []).flatMap((m: { content: unknown }) =>
+              Array.isArray(m.content)
+                ? m.content
+                    .filter((p: { type: string }) => p.type === 'file')
+                    .map((p: { file: { filename: string } }) => p.file.filename)
+                : [],
+            )
+          : [];
+        state.parsedFiles.push(...files);
+        const annotations = files.map((f) => ({
+          type: 'file',
+          file: {
+            hash: `hash-${f}`,
+            name: f,
+            content: [
+              {
+                type: 'text',
+                text: `<file name="${f}">
+${state.parseText(f)}
+</file>`,
+              },
+            ],
+          },
+        }));
         return Response.json(
           {
             id: `gen-test-${state.requests.length}`,
             model: body.model,
-            choices: [{ message: { role: 'assistant', content: 'mock answer' } }],
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: state.answer,
+                  ...(annotations.length ? { annotations } : {}),
+                },
+              },
+            ],
             usage: { prompt_tokens: 20, completion_tokens: 5, cost: state.costUsd },
           },
           { headers: state.cacheHit ? { 'cf-aig-cache-status': 'HIT' } : {} },

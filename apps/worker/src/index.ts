@@ -8,7 +8,10 @@ import { AppError } from './lib/http';
 import { createNotifier, memoryOutbox } from './lib/notifier';
 import { runScheduled } from './cron';
 import { adminRoutes } from './routes/admin';
+import { bookRoutes } from './routes/books';
+import { evalRoutes } from './routes/evals';
 import { aiRoutes } from './routes/ai';
+import { askRoutes } from './routes/ask';
 import { adminCreditRoutes, creditRoutes } from './routes/credits';
 import { modelRoutes } from './routes/models';
 import { catalogRoutes } from './routes/catalog';
@@ -55,10 +58,13 @@ export function createApp() {
   app.route('/me', meRoutes);
   app.route('/catalog', catalogRoutes);
   app.route('/admin/models', modelRoutes);
+  app.route('/admin/books', bookRoutes);
+  app.route('/admin/evals', evalRoutes);
   app.route('/admin/credits', adminCreditRoutes);
   app.route('/admin', adminRoutes);
   app.route('/credits', creditRoutes);
   app.route('/ai', aiRoutes);
+  app.route('/ask', askRoutes);
   app.route('/institutions', institutionRoutes);
   app.route('/teacher', teacherRoutes);
   app.route('/parent-consent', parentConsentRoutes);
@@ -92,3 +98,6 @@ export default {
     ctx.waitUntil(runScheduled(controller.cron, env));
   },
 } satisfies ExportedHandler<Env>;
+
+// Durable Workflow classes must be exported from the entry module (they are functions/classes).
+export { IngestBookWorkflow } from './content/workflow';

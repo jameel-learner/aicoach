@@ -10,9 +10,10 @@
 | Sign-in codes & emails | Live Cloudflare log: `pnpm logs:staging` (no real email yet) |
 | Secrets | Stored in Cloudflare (`wrangler secret put … --env staging`); never in git |
 | AI calls (from Phase 1) | Same OpenRouter account; staging usage costs real credits |
-| Live since | 2026-11-08 (Phase 0) · Phase 1 deployed and signed off 2026-11-09 (commit `4a2509b`) |
+| Live since | 2026-11-08 (Phase 0) · Phase 1 deployed and signed off 2026-11-09 (commit `4a2509b`) · Phase 2: deploy + test pending ([§3c](#3c-phase-2-on-staging-textbooks--ask)) |
+| Textbooks (from Phase 2) | **Shared with local**: Vectorize `aicoach-content-chunks` + R2 `aicoach-content`. Books are **processed on local only**; staging **imports** them (free) |
 
-Contents: [1. End-of-phase checklist](#1-end-of-phase-checklist) · [2. Deploy](#2-deploy) · [3. Test on staging](#3-test-on-staging) · [3a. Phase 1 on staging](#3a-phase-1-on-staging-credits--ai) · [3b. Why automated browser tests don't run on staging](#3b-why-automated-browser-tests-dont-run-on-staging) · [4. Secrets & config](#4-secrets--config) · [5. Before real users](#5-before-real-users) · [6. How staging was created](#6-how-staging-was-created) · [7. Troubleshooting](#7-troubleshooting)
+Contents: [1. End-of-phase checklist](#1-end-of-phase-checklist) · [2. Deploy](#2-deploy) · [3. Test on staging](#3-test-on-staging) · [3a. Phase 1 on staging](#3a-phase-1-on-staging-credits--ai) · [3b. Why automated browser tests don't run on staging](#3b-why-automated-browser-tests-dont-run-on-staging) · [3c. Phase 2 on staging](#3c-phase-2-on-staging-textbooks--ask) · [4. Secrets & config](#4-secrets--config) · [5. Before real users](#5-before-real-users) · [6. How staging was created](#6-how-staging-was-created) · [7. Troubleshooting](#7-troubleshooting)
 
 ---
 
@@ -119,6 +120,42 @@ Staging AI calls cost real OpenRouter credit (the whole walkthrough is well unde
 
 ---
 
+## 3c. Phase 2 on staging (textbooks & Ask)
+
+Do these once, in order. No new secrets are needed.
+
+**1. Code committed and pushed, CI green** (Claude does this when you say so).
+
+**2. Book published on local.** Staging can only import books that are **published on local** (they live in the shared content store). Part I is published; Part II can be imported later in the same way, without a new deploy.
+
+**3. Deploy** (applies migrations `0002_phase2_books` and `0003_phase2_answers` to the staging database):
+
+```powershell
+cd E:\repository\aicoach
+pnpm deploy:staging
+```
+
+Answer **y** when it asks to apply the migrations. The start-up list must show `CONTENT_VECTORS`, `CONTENT` and `AI`. There is deliberately **no** `INGEST_BOOK` workflow on staging: books are processed on local only.
+
+**4. Test.** Keep `pnpm logs:staging` running in Terminal 1 for sign-in codes. On https://aicoach-api-staging.jameel-outskill.workers.dev:
+
+1. **Admin → Textbooks → Shared content store:** the local book is listed as *Not imported* → **Import**. It takes a few seconds and costs nothing (no OpenRouter calls; the chunks and vectors already exist). The book shows *Published v1 · imported from the shared store*.
+2. Open the book → **Institutions using this book:** tick your **staging** institution → **Save**.
+3. Check that processing is blocked: on the imported book there is no *Read all pages*; uploading a new PDF and pressing *Read all pages* says *processing is not enabled in this environment*. That's correct.
+4. **Platform wallet:** if it is empty, issue a small amount (e.g. ₹20) **To: Platform wallet** (Admin's questions are paid from it).
+5. **Ask (web):** any page → **Ask your textbook** → *What is goodwill?* The answer streams in with page badges. Ask it again: *Saved answer · free*. Try *Who won the 2011 World Cup?*: *Not in your textbook*. **Expand** widens the drawer.
+6. **Ask (phone):** `pnpm dev:mobile:staging` in Terminal 2, sign in as the staging **student** → **Learn** tab → ask a question. It is charged to the student's class wallet (then their own), so the student needs credits from Phase 1 (or give some from the teacher first).
+7. **Remove an enrolment:** Admin → **Users** → the student → **Show** under *Classes & subjects* (optional; re-join with the class code afterwards).
+8. **Admin → Credits & payments:** the *Platform float* shows the answers' cost. *Charged vs OpenRouter* fills in after the hourly job has run.
+
+The staging answer cache is separate from local, so the first answers on staging are fresh (charged) ones. The whole test costs well under ₹1.
+
+**5. Sign off:** tell Claude Phase 2 works on staging. Claude records it in progress.md and starts Phase 3.
+
+**If something fails only on staging:** check `pnpm logs:staging`. "no such table: books" (or `answers`) means the migrations didn't apply; re-run `pnpm deploy:staging`. Error **1102** during Import or Ask is the free plan's CPU limit: retry, and if it keeps happening move to Workers Paid ([§5](#5-before-real-users)).
+
+---
+
 ## 3b. Why automated browser tests don't run on staging
 
 The Playwright tests (`test:e2e`) refuse to run unless the server says it is `development`. That's deliberate:
@@ -145,6 +182,7 @@ pnpm exec wrangler secret list --env staging   # see which exist (values are nev
 | `BETTER_AUTH_SECRET` | ✅ set (random, different from local) | Phase 0 |
 | `TURNSTILE_SECRET_KEY` | ✅ set (Cloudflare **test** key) | Phase 0 |
 | `OPENROUTER_API_KEY` | ✅ set 2026-11-09 (same key as local, per user) | Phase 1 |
+| *(none new)* | Phase 2 uses bindings, not secrets: Vectorize, R2 and Workers AI are in `env.staging` of `wrangler.jsonc` | Phase 2 |
 | `RESEND_API_KEY` | ⬜ when a sender domain exists | Pilot |
 
 Non-secret settings are under `env.staging.vars` in `apps\worker\wrangler.jsonc` (e.g. `EMAIL_PROVIDER` is `console`). They take effect on the next deploy.
@@ -184,3 +222,6 @@ For reference, or to rebuild it:
 | Error page "1102" / "Worker exceeded resource limits" | Free-plan CPU limit; retry. Persistent: move to Workers Paid ([§5](#5-before-real-users)). |
 | Phone shows "Local server" while testing staging | Stop Terminal 2 and run `pnpm dev:mobile:staging`. |
 | A new feature fails only on staging | Usually a missing secret ([§4](#4-secrets--config)) or a migration not applied (re-run `pnpm deploy:staging`). |
+| Textbooks: *Shared content store* is empty | The book isn't **published** on local yet (publish it there first), or the deploy didn't happen. |
+| Textbooks: "processing is not enabled in this environment" | Expected: books are processed on local only. Use **Import** under *Shared content store*. |
+| Ask: "No textbook is set up for you yet" | Import the book on staging, and tick the staging institution under *Institutions using this book*. |

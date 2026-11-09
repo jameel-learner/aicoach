@@ -10,6 +10,8 @@ import { useMe } from './lib/queries';
 import { AdminCreditsPage } from './pages/admin/AdminCreditsPage';
 import { InstitutionsPage } from './pages/admin/InstitutionsPage';
 import { ModelsPage } from './pages/admin/ModelsPage';
+import { BookPage } from './pages/admin/BookPage';
+import { BooksPage } from './pages/admin/BooksPage';
 import { TaxonomyPage } from './pages/admin/TaxonomyPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { AuthPage } from './pages/AuthPage';
@@ -77,6 +79,12 @@ const adminCreditsRoute = createRoute({
   component: AdminCreditsPage,
 });
 const adminModelsRoute = createRoute({ ...parent, path: '/admin/models', component: ModelsPage });
+const adminBooksRoute = createRoute({ ...parent, path: '/admin/books', component: BooksPage });
+const adminBookRoute = createRoute({
+  ...parent,
+  path: '/admin/books/$bookId',
+  component: BookPage,
+});
 const creditsRoute = createRoute({ ...parent, path: '/credits', component: CreditsHomePage });
 const walletRoute = createRoute({
   ...parent,
@@ -102,6 +110,8 @@ const routeTree = rootRoute.addChildren([
     classRoute,
     adminCreditsRoute,
     adminModelsRoute,
+    adminBooksRoute,
+    adminBookRoute,
     creditsRoute,
     walletRoute,
     playgroundRoute,

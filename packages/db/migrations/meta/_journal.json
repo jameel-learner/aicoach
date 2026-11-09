@@ -15,6 +15,20 @@
       "when": 1794159219711,
       "tag": "0001_phase1_llm_credits",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794170078620,
+      "tag": "0002_phase2_books",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794171444624,
+      "tag": "0003_phase2_answers",
+      "breakpoints": true
     }
   ]
 }

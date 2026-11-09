@@ -8,6 +8,7 @@
 | Database | Local SQLite copy of D1 in `apps\worker\.wrangler\state` (survives restarts) |
 | Sign-in codes & emails | Printed in the **server terminal** (no real email is sent) |
 | Secrets | `apps\worker\.dev.vars` (git-ignored) |
+| Textbook content (from Phase 2) | **Shared with staging**: Vectorize `aicoach-content-chunks` + R2 `aicoach-content` on Cloudflare (needs internet and `wrangler login`). A book processed here is imported on staging without re-processing |
 | AI calls (from Phase 1) | Real calls to OpenRouter using the key in `.dev.vars`, so **local AI use costs real OpenRouter credit** |
 
 Contents: [1. One-time setup](#1-one-time-setup) · [2. Start (every day)](#2-start-every-day) · [3. First-time walkthrough (10 steps)](#3-first-time-walkthrough-10-steps) · [4. After pulling new code](#4-after-pulling-new-code) · [5. Stop / reset](#5-stop--reset) · [6. Troubleshooting](#6-troubleshooting) · [7. Commands](#7-commands)
@@ -141,6 +142,22 @@ Do this after the 10 steps above (same accounts). **AI calls are real and cost r
 12. **POC → Credits → institution:** *Your downline* shows the class's usage. The POC can open the class wallet but not the student's (immediate downline only).
 13. **Admin → AI models:** switch *Admin/Teacher playground* to `openai/gpt-4o-mini`. Within ~30 seconds the playground answers from that model (shown in the answer). Switch it back.
 
+## 3c. Textbooks walkthrough (Phase 2, in progress)
+
+Processes the NCERT books **once** into the shared content store (staging later imports them for free). Real cost: about **US$0.0022 per page**, ≈ US$1.10 for both books, paid from the platform wallet.
+
+1. Restart Terminal 1 (`pnpm dev:worker`). Its start-up list must show `CONTENT_VECTORS`, `CONTENT` and `AI` as **remote** and `INGEST_BOOK` (needs internet + `wrangler login`).
+2. **Admin → Credits & payments → Issue credits → To: Platform wallet**, e.g. `150` (₹; covers both books with margin).
+3. **Admin → Textbooks → Upload:** `docs\textbooks\accountancy_1.pdf`, title *NCERT Accountancy Class 12 Part I*, subject *KSEAB · 2nd PUC · Accountancy* → **Upload** (free).
+4. Open the book → **Read all pages**. Progress updates every few seconds (about 3 to 4 minutes for 204 pages; you can leave the page). *OCR spent so far* shows the real cost. When it finishes, the status changes to **Review** and every page box is **white** (= read). That is the end of the automatic part: nothing turns green by itself. **Red** appears only for pages that failed to read; an underline marks a page worth checking (*garbled*, *empty*, *short*).
+5. **Review:** click **Needs a look** to see failed/flagged pages. Compare the PDF (left) with the text (right). Fix anything wrong → **Save edits & next**, or **Read this page again**. A page turns **green** when you click **Approve & next**, **blue** when you save an edit. Approving every page is optional; publishing needs only that no page is grey or red. Spot-check a few balance-sheet pages: tables should be `| column |` rows.
+6. **Publish.** Status becomes *Published v1*; the book appears under *Shared content store* as *Up to date*.
+7. **Institutions using this book:** tick your institution → **Save**.
+8. Repeat 3 to 7 for `accountancy_2.pdf` (*Part II*, 296 pages).
+9. **Ask (web):** on any page, click **Ask your textbook** (bottom right). Ask e.g. *What is goodwill?* The answer streams in, with page badges (click one to see the source text). Ask the same again: *Saved answer · free*. **Get a new answer** makes another version. Try an off-syllabus question (*Who won the 2011 World Cup?*): it says *Not in your textbook*. **Expand** widens the drawer.
+10. **Ask (phone):** as the student, open the **Learn** tab and ask a question. The charge comes from the student's class wallet (then own).
+11. **Evaluation:** in a new terminal, `node evals/run.mjs --email <your admin email> --password <your password>` (≈ US$0.05). It prints citation accuracy (target ≥ 90%) and correctness (target ≥ 85%); **Admin → AI models** shows the scores. Add `--model openai/gpt-4o-mini` to compare models.
+
 ## 4. After pulling new code
 
 When a phase adds dependencies or database changes:
@@ -203,6 +220,7 @@ Run from `E:\repository\aicoach`.
 | Apply DB migrations | `pnpm db:migrate:local` |
 | Load pilot data | `pnpm db:seed:local` |
 | Remove leftover test data (`@example.com` accounts, E2E/Smoke colleges, their credits) | `pnpm cleanup-test:local` (runs automatically after `test:e2e`) |
+| Run the hourly job by hand (release stale holds, check charges against OpenRouter); cron doesn't fire under `wrangler dev` | `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+*+*+*+*"` (needs `dev:worker` running) |
 | Make a user Admin | `pnpm make-admin:local <email>` |
 | Recent dev emails (codes, links) | http://localhost:8787/api/dev/outbox?to=&lt;email&gt; |
 | Type-check everything | `pnpm typecheck` |

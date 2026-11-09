@@ -155,6 +155,19 @@ flowchart TB
 | **KV** | Feature flags, prompt versions, model routing config, hot read-mostly caches (e.g. compiled strategy docs) | Global low-latency reads |
 | **Durable Object storage** | Live session state and checkpoints, timers, room state | Strong consistency per session. Survives disconnects, which enables one-tap resume |
 
+**Shared content store (decision 9.4-1).** Processed textbook content is platform reference data, so it is processed **once** and shared by LOCAL and STAGING (production gets its own copy later):
+
+| Shared resource | Name | Holds |
+|---|---|---|
+| Vectorize index | `aicoach-content-chunks` (1024 dims, cosine; embeddings `@cf/baai/bge-m3`) | One vector per chunk. Id `<bookId>:<version>:<chunkNo>`. Metadata: `book` (= `<bookId>@<version>`, indexed for filtering), `page`, `chapter`, `lang` |
+| R2 bucket | `aicoach-content` | Original PDFs and **versioned book packages**: `books/<bookId>/<version>/manifest.json`, `pages.jsonl` (per-page Markdown), `chunks.jsonl` (chunk text + page/section anchors), `figures/…` |
+
+- **Ingestion runs once, in whichever environment the Admin uploads from** (normally LOCAL during development). It writes the package to R2 and the vectors to Vectorize. A version is **immutable** once published; re-processing creates a new version.
+- **Each environment imports a book from the package** ("Import book" in Admin): its own D1 gets the `books` / `book_pages` / `chunks` rows and the FTS5 index from `chunks.jsonl`. No re-parsing, no re-embedding, no LLM cost.
+- **Each environment keeps its own users, credits, mappings and caches.** Queries filter Vectorize by the `book` values the environment has imported and mapped to the learner's institution, so an environment never sees a book it hasn't imported.
+- **Safety:** environments only **add** to the shared store. Deleting a book version from the shared store is an explicit Admin action with a confirmation; local test clean-up, automated tests and resets never touch it (unit tests use in-memory fakes).
+- Per-environment answer caches (`qa_cache`) stay in each environment (they reference D1 rows and wallets).
+
 ### 3.4 Textbook ingestion pipeline (spec 1.1–1.2, 4.3)
 
 ```mermaid
@@ -234,6 +247,12 @@ flowchart LR
 - **Billing:** a cache hit (semantic or gateway) costs **0 credits**, because OpenRouter charged nothing. "Force new answer" is a real LLM call and is charged normally, and the UI says so before the user confirms. On a gateway cache hit the cached body still contains the original `usage.cost`, so the metering module must check the gateway cache-status header and **not** charge.
 
 **Grounding guarantees (5.5.3):** the generation prompt receives chunks with IDs and must emit `[[c:<chunk_id>]]` markers. The **verifier** (a small, cheap model) checks each claim–citation pair. An unsupported claim is either removed or tagged ⚠ *uncertain*. The client turns citation markers into tappable badges such as "Ch 3 · p. 87 · Ex 3.2", plus a **syllabus scope badge** (in syllabus / beyond syllabus).
+
+**As built in Phase 2 (2026-11-09):**
+- **Answer cache** is per environment in D1 (`answers`: scope key = sorted book versions + profile, normalised question, question embedding, answer, citations, variant). Lookup: exact normalised match, else cosine ≥ 0.92 over the scope's recent answers. A separate `qa_cache` Vectorize index isn't needed at pilot scale (the shared index holds only textbook chunks).
+- **Citation verifier** is deterministic (no extra LLM call): unknown `[S#]` markers are removed; a citation whose sentence shares < 20% content words with its excerpt is marked unsupported → the answer is flagged "check with your textbook".
+- **"Not in your textbook"**: the prompt makes the model start with a marker that the server strips; no retrieval hits → the same answer without an LLM call.
+- **Clients**: phone Learn tab and a web drawer ("Ask your textbook", floating on every page, expandable). Formulas are plain text (prompt rule), so no KaTeX is needed on the phone.
 
 ### 3.7 Session engine: journeys as state graphs
 
@@ -661,6 +680,8 @@ Each phase ends with a **deployable, demoable slice** plus automated tests and e
 **Test & exit criteria:** ledger invariant property tests (no negative balances with 50 concurrent calls on one wallet; `issued = Σ balances + Σ billed`). Lock requires acknowledgement. An edit clears the acknowledgement. A locked allotment rejects every change. Billing = raw × 1.10 with exact integer rounding. Gateway cache hit charged 0. Visibility tests: each role can't read beyond its immediate downline (Admin can). A model switch takes effect without a redeploy. Reconciliation difference vs OpenRouter < 0.5%.
 
 ### Phase 2: Textbook ingestion & grounded Q&A
+> **Status: ✅ signed off on LOCAL 2026-11-09** (staging test pending). Exit measured: reconciliation 0.0% difference, cache hit ~30 ms, correctness 91.7%, citation 87.5% (Part I only). Carried into Phase 3: Part II ingestion + re-run evals, two citation misses, LaTeX rendering. Changes made during the phase: shared content store (9.4-1), enrolment removal (9.4-2), web "Ask your textbook" drawer. Books are processed only on LOCAL; staging imports them (no Workflow on staging).
+
 **Goal:** upload a textbook and ask questions that get answers with page citations.
 
 - Pilot content: **NCERT Accountancy (Class 12, Parts I & II)** as the first platform book for KSEAB 2nd PUC Accountancy
@@ -842,3 +863,10 @@ With one developer (you + Claude), phases run **in order, 0 → 9**. Each phase 
 | 2 | Currency shown | **Everything in INR** (1 credit = ₹1; replaces 9.2-2's US$1). Only the OpenRouter float is shown in US$ (with INR equivalent). Usage converted at an Admin-set USD→INR rate stored per call |
 | 3 | Fee visibility | The platform fee % (and exchange rate) is **Admin-only**. No user-facing text mentions the fee or the dollar value of a credit |
 | 4 | Change of class teacher | Admin/POC can reassign a class. The class's unused balance **returns to the institution**; the teacher's own (direct) credits and students' credits stay where they are |
+
+### 9.4 Follow-up decisions (2026-11-09, Phase 2 start)
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Vector search for LOCAL vs STAGING | **One shared content store** (Vectorize `aicoach-content-chunks` + R2 `aicoach-content`) for LOCAL and STAGING, so each PDF is processed **once**. Environments import immutable, versioned book packages into their own D1. An explicit exception to the environment-separation rule, limited to textbook content (§3.3) |
+| 2 | Removing a learner from a class or self-study subject (user request, walkthrough) | **Admin → Users → Classes & subjects → Remove.** The enrolment is kept with status `removed` (re-joining reactivates it). A student's unused class-wallet balance returns to the **class** wallet and their pending requests from it are cancelled; their own (direct) credits stay. A class teacher's enrolment is ended via *Change teacher* instead. Ask your textbook ignores an enrolment id that isn't the student's active one and uses their first subject (`src/enrolments.ts`, `src/content/scope.ts`) |

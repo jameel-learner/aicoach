@@ -32,12 +32,14 @@ export class Jar {
 export async function call(
   method: string,
   path: string,
-  opts: { jar?: Jar; body?: unknown; form?: Record<string, string> } = {},
+  opts: { jar?: Jar; body?: unknown; form?: Record<string, string>; multipart?: FormData } = {},
 ): Promise<Response> {
   const headers: Record<string, string> = { origin: BASE };
   if (opts.jar) headers.cookie = opts.jar.header();
   let body: BodyInit | undefined;
-  if (opts.form) {
+  if (opts.multipart) {
+    body = opts.multipart; // fetch sets the multipart boundary header
+  } else if (opts.form) {
     body = new URLSearchParams(opts.form);
     headers['content-type'] = 'application/x-www-form-urlencoded';
   } else if (opts.body !== undefined) {

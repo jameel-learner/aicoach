@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { authClient } from '../lib/auth-client';
+import { AskDrawer } from './AskDrawer';
 
 interface NavItem {
   to: string;
@@ -21,6 +22,7 @@ export function navFor(me: MeResponse): { section: string; items: NavItem[] }[] 
         { to: '/admin/users', label: 'Users' },
         { to: '/admin/credits', label: 'Credits & payments' },
         { to: '/admin/models', label: 'AI models' },
+        { to: '/admin/books', label: 'Textbooks' },
         { to: '/credits', label: 'Wallets' },
         { to: '/playground', label: 'AI playground' },
       ],
@@ -132,6 +134,7 @@ export function Layout({ me }: { me: MeResponse }) {
 
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8">
         <Outlet />
+        <AskDrawer me={me} />
         <div className="mt-10 border-t border-border pt-4 text-sm md:hidden">
           {me.user.name} · {ROLE_LABELS[me.user.role]} ·{' '}
           <button className="font-semibold text-primary underline" onClick={() => void signOut()}>

@@ -201,12 +201,67 @@ export function ModelsPage() {
           </Table>
           <p className="mt-3 text-sm text-muted">
             Only models that can handle what a feature needs are offered (e.g. only audio-capable
-            models for voice input). Quality scores per model arrive with the evaluation suite in
-            Phase 2.
+            models for voice input).
           </p>
         </Card>
       </div>
+      <div className="mt-6">
+        <EvalScores />
+      </div>
     </>
+  );
+}
+
+interface EvalRun {
+  id: string;
+  model: string;
+  promptVersion: string;
+  questions: number;
+  citationAccuracy: number;
+  correctness: number;
+  notes: string | null;
+  createdAt: string;
+}
+
+const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
+
+/** Latest eval-harness run per model (evals/run.mjs). Targets: citations ≥ 90%, correctness ≥ 85%. */
+function EvalScores() {
+  const q = useQuery({
+    queryKey: ['admin', 'evals'],
+    queryFn: () => api<EvalRun[]>('/admin/evals/runs'),
+  });
+  return (
+    <Card title="Answer quality (golden-set evaluation)">
+      <ErrorText error={q.error ? errorMessage(q.error) : null} />
+      <Table
+        head={['Model', 'Citation accuracy', 'Correctness', 'Questions', 'Prompt', 'Run']}
+        empty={q.data?.length === 0}
+      >
+        {q.data?.map((r) => (
+          <tr key={r.id}>
+            <Td className="font-medium">{r.model}</Td>
+            <Td>
+              <Badge tone={r.citationAccuracy >= 0.9 ? 'good' : 'warn'}>
+                {pct(r.citationAccuracy)}
+              </Badge>
+            </Td>
+            <Td>
+              <Badge tone={r.correctness >= 0.85 ? 'good' : 'warn'}>{pct(r.correctness)}</Badge>
+            </Td>
+            <Td>{r.questions}</Td>
+            <Td>{r.promptVersion}</Td>
+            <Td className="whitespace-nowrap">{fmtDate(r.createdAt)}</Td>
+          </tr>
+        ))}
+      </Table>
+      <p className="mt-3 text-sm text-muted">
+        Run on your PC:{' '}
+        <code>node evals/run.mjs --email &lt;admin&gt; --password &lt;password&gt;</code> (add{' '}
+        <code>--model &lt;slug&gt;</code> to score another model). Targets: citation accuracy ≥ 90%,
+        correctness ≥ 85%.
+      </p>
+    </Card>
   );
 }
 

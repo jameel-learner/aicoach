@@ -14,6 +14,13 @@ export interface Env {
   EMAIL_PROVIDER: 'console' | 'resend' | 'memory';
   EMAIL_FROM: string;
   TURNSTILE_SITE_KEY: string;
+  /** Shared textbook content store (LOCAL + STAGING, decision 9.4-1). Only ever add to it. */
+  CONTENT_VECTORS?: VectorizeIndex;
+  CONTENT?: R2Bucket;
+  /** Workers AI: embeddings (@cf/baai/bge-m3) and reranking. */
+  AI?: Ai;
+  /** Durable textbook ingestion (src/content/workflow.ts). Absent where books are only imported. */
+  INGEST_BOOK?: Workflow<import('./content/ingest').IngestParams>;
   // Secrets
   BETTER_AUTH_SECRET: string;
   RESEND_API_KEY?: string;

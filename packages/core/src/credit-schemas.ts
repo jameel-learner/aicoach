@@ -133,3 +133,54 @@ export const playgroundSchema = z.object({
   classGroupId: z.string().min(1).optional(),
   maxTokens: z.number().int().min(16).max(4000).default(400),
 });
+
+// ---------------------------------------------------------------- Phase 2: textbooks
+
+export const bookMetaSchema = z.object({
+  title: z.string().trim().min(3, 'Enter the book title').max(200),
+  offeringId: z.string().min(1, 'Choose the board · class · subject'),
+  edition: z.string().trim().max(60).optional(),
+  language: z
+    .string()
+    .trim()
+    .regex(/^[a-z]{2}$/, 'Use a 2-letter language code like en')
+    .default('en'),
+});
+
+/** Admin review of one parsed page: corrected Markdown (optional) and approval. */
+export const updateBookPageSchema = z.object({
+  markdown: z.string().max(60_000).optional(),
+});
+
+export const mapBookInstitutionsSchema = z.object({
+  institutionIds: z.array(z.string().min(1)).max(90),
+});
+
+/** "Ask your textbook" (Phase 2). */
+export const askSchema = z.object({
+  question: z.string().trim().min(3, 'Type a question').max(1000),
+  enrolmentId: z.string().min(1).optional(),
+  classGroupId: z.string().min(1).optional(),
+  bookIds: z.array(z.string().min(1)).max(20).optional(),
+  forceNew: z.boolean().default(false),
+  /** Admin only (eval runs): answer with this model instead of the registry's tutor model. */
+  model: z.string().trim().min(3).max(120).optional(),
+  /** false → one JSON response (eval runner, simple clients). */
+  stream: z.boolean().default(true),
+});
+
+/** Eval harness (evals/): judge one answer, and store a run's scores. */
+export const evalJudgeSchema = z.object({
+  question: z.string().min(1).max(2000),
+  reference: z.string().min(1).max(4000),
+  answer: z.string().max(12_000),
+});
+export const evalRunSchema = z.object({
+  model: z.string().min(3).max(120),
+  promptVersion: z.string().min(1).max(60),
+  questions: z.number().int().min(1),
+  citationAccuracy: z.number().min(0).max(1),
+  correctness: z.number().min(0).max(1),
+  notes: z.string().max(500).optional(),
+  details: z.array(z.unknown()).max(500).optional(),
+});

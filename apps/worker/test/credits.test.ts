@@ -975,4 +975,115 @@ describe('change of class teacher (decision 9.3-4)', () => {
     ).all();
     expect(mismatch.results).toEqual([]);
   });
+
+  it('Admin removes a student from a class or self-study; class credits go back to the class', async () => {
+    const t = await buildTree();
+    await issue(t.admin.jar, t.inst.id, '100');
+    await call('POST', '/api/credits/allotments', {
+      jar: t.poc.jar,
+      body: { fromWalletId: t.instW.id, toWalletId: t.classW.id, credits: '40' },
+    });
+    await call('POST', '/api/credits/allotments', {
+      jar: t.teacher.jar,
+      body: { fromWalletId: t.classW.id, toWalletId: t.studentW.id, credits: '5' },
+    });
+    await call('POST', '/api/credits/requests', {
+      jar: t.student.jar,
+      body: { walletId: t.studentW.id, credits: '3' },
+    });
+    // Also self-study in the same subject
+    const offeringId = t.cls.offeringId as string;
+    expect(
+      (
+        await call('POST', '/api/me/enrolments/direct', {
+          jar: t.student.jar,
+          body: { offeringId },
+        })
+      ).status,
+    ).toBe(201);
+    const users = await json<any[]>(
+      await call('GET', `/api/admin/users?q=${encodeURIComponent(t.student.email)}`, {
+        jar: t.admin.jar,
+      }),
+    );
+    const sid = users[0].id as string;
+    const listPath = `/api/admin/users/${sid}/enrolments`;
+    let list = await json<any[]>(await call('GET', listPath, { jar: t.admin.jar }));
+    expect(list.map((e) => e.classGroup?.id ?? null)).toEqual([t.cls.id, null]);
+    const [inClass, selfStudy] = list;
+
+    // Admin only
+    expect((await call('DELETE', `${listPath}/${inClass.id}`, { jar: t.poc.jar })).status).toBe(
+      403,
+    );
+    const res = await call('DELETE', `${listPath}/${inClass.id}`, { jar: t.admin.jar });
+    expect(res.status).toBe(200);
+    expect((await json(res)).returnedMicro).toBe(5 * MICRO);
+    expect((await balanceMicro(t.studentW.id)).balance_micro).toBe(0);
+    expect((await balanceMicro(t.classW.id)).balance_micro).toBe(40 * MICRO);
+    const req = (
+      await json<any[]>(
+        await call('GET', '/api/credits/requests?scope=mine', { jar: t.student.jar }),
+      )
+    )[0];
+    expect(req).toMatchObject({ status: 'cancelled', decisionNote: 'Removed from the class' });
+    list = await json<any[]>(await call('GET', listPath, { jar: t.admin.jar }));
+    expect(list.map((e) => e.id)).toEqual([selfStudy.id]);
+    // The student's phone may still send the removed id: Ask falls back to their other subject
+    const scope = await json(
+      await call('GET', `/api/ask/scope?enrolmentId=${inClass.id}`, { jar: t.student.jar }),
+    );
+    expect(scope.context.enrolmentId).toBe(selfStudy.id);
+
+    // The class teacher's enrolment is changed via "Change teacher", not removed here
+    const tUsers = await json<any[]>(
+      await call('GET', `/api/admin/users?q=${encodeURIComponent(t.teacher.email)}`, {
+        jar: t.admin.jar,
+      }),
+    );
+    const tList = await json<any[]>(
+      await call('GET', `/api/admin/users/${tUsers[0].id}/enrolments`, { jar: t.admin.jar }),
+    );
+    const refused = await call(
+      'DELETE',
+      `/api/admin/users/${tUsers[0].id}/enrolments/${tList[0].id}`,
+      {
+        jar: t.admin.jar,
+      },
+    );
+    expect(refused.status).toBe(400);
+
+    // Re-joining reactivates the same enrolment; joining twice is still refused
+    const again = await call('POST', '/api/me/enrolments/join', {
+      jar: t.student.jar,
+      body: { joinCode: t.cls.joinCode },
+    });
+    expect(again.status).toBe(201);
+    expect((await json(again)).id).toBe(inClass.id);
+    expect(
+      (
+        await call('POST', '/api/me/enrolments/join', {
+          jar: t.student.jar,
+          body: { joinCode: t.cls.joinCode },
+        })
+      ).status,
+    ).toBe(409);
+
+    // Self-study: nothing to return; re-adding it works too
+    const r2 = await call('DELETE', `${listPath}/${selfStudy.id}`, { jar: t.admin.jar });
+    expect((await json(r2)).returnedMicro).toBe(0);
+    expect(
+      (
+        await call('POST', '/api/me/enrolments/direct', {
+          jar: t.student.jar,
+          body: { offeringId },
+        })
+      ).status,
+    ).toBe(201);
+
+    const mismatch = await env.DB.prepare(
+      'SELECT w.id FROM wallets w LEFT JOIN (SELECT wallet_id, sum(amount_micro) s FROM ledger_entries GROUP BY wallet_id) l ON l.wallet_id = w.id WHERE w.balance_micro != coalesce(l.s, 0)',
+    ).all();
+    expect(mismatch.results).toEqual([]);
+  });
 });

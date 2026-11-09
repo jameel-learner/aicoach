@@ -19,11 +19,13 @@ import {
 } from '@aicoach/db';
 import { and, asc, desc, eq, like, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { removeEnrolment } from '../enrolments';
 import type { AppBindings } from '../env';
 import { audit } from '../lib/audit';
 import { badRequest, conflict, isUniqueViolation, notFound, parseBody } from '../lib/http';
 import { requireAuth, requireRole } from '../middleware/session';
 import { listOfferings } from './catalog';
+import { listMyEnrolments } from './me';
 
 export const adminRoutes = new Hono<AppBindings>();
 adminRoutes.use('*', requireAuth, requireRole('admin'));
@@ -234,6 +236,22 @@ adminRoutes.get('/users', async (c) => {
     .orderBy(desc(user.createdAt))
     .limit(100);
   return c.json(rows);
+});
+
+/** A user's active enrolments (classes and self-study subjects). */
+adminRoutes.get('/users/:id/enrolments', async (c) =>
+  c.json(await listMyEnrolments(c.var.db, c.req.param('id'))),
+);
+
+/** Removes a user from a class or self-study subject (decision 9.4-2, see src/enrolments.ts). */
+adminRoutes.delete('/users/:id/enrolments/:enrolmentId', async (c) => {
+  const { id, enrolmentId } = c.req.param();
+  const res = await removeEnrolment(c.var.db, c.var.user, id, enrolmentId);
+  await audit(c.var.db, c.var.user.id, 'remove_enrolment', 'enrolment', enrolmentId, {
+    userId: id,
+    ...res,
+  });
+  return c.json({ ok: true, ...res });
 });
 
 adminRoutes.patch('/users/:id/role', async (c) => {

@@ -20,6 +20,7 @@ import {
 } from '@aicoach/db';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { enrolOrReactivate } from '../enrolments';
 import type { AppBindings, Env, SessionUser } from '../env';
 import { audit } from '../lib/audit';
 import { parentConsentEmail } from '../lib/emails';
@@ -152,17 +153,14 @@ meRoutes.post('/enrolments/join', requireRole('student', 'teacher'), async (c) =
   if (!inst || inst.status !== 'active')
     throw forbidden('This institution is not accepting enrolments');
   try {
-    const row = await c.var.db
-      .insert(enrolments)
-      .values({
-        userId: c.var.user.id,
-        roleIn: c.var.user.role === 'teacher' ? 'teacher' : 'student',
-        offeringId: cls.offeringId,
-        institutionId: cls.institutionId,
-        classGroupId: cls.id,
-      })
-      .returning()
-      .get();
+    const row = await enrolOrReactivate(c.var.db, {
+      userId: c.var.user.id,
+      roleIn: c.var.user.role === 'teacher' ? 'teacher' : 'student',
+      offeringId: cls.offeringId,
+      institutionId: cls.institutionId,
+      classGroupId: cls.id,
+    });
+    if (!row) throw conflict('You are already enrolled in this class');
     return c.json(row, 201);
   } catch (err) {
     if (isUniqueViolation(err)) throw conflict('You are already enrolled in this class');
@@ -180,15 +178,12 @@ meRoutes.post('/enrolments/direct', requireRole('student', 'teacher'), async (c)
     .get();
   if (!offering) throw notFound('Subject offering');
   try {
-    const row = await c.var.db
-      .insert(enrolments)
-      .values({
-        userId: c.var.user.id,
-        roleIn: c.var.user.role === 'teacher' ? 'teacher' : 'student',
-        offeringId,
-      })
-      .returning()
-      .get();
+    const row = await enrolOrReactivate(c.var.db, {
+      userId: c.var.user.id,
+      roleIn: c.var.user.role === 'teacher' ? 'teacher' : 'student',
+      offeringId,
+    });
+    if (!row) throw conflict('You are already enrolled in this subject');
     return c.json(row, 201);
   } catch (err) {
     if (isUniqueViolation(err)) throw conflict('You are already enrolled in this subject');

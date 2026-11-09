@@ -37,6 +37,13 @@ export interface MeteredChatInput {
   userId: string | null;
   maxTokens?: number;
   responseFormat?: ChatRequest['responseFormat'];
+  plugins?: ChatRequest['plugins'];
+  /** Non-token charges to add to the hold estimate (e.g. OCR at ~$0.002/page), nano-USD. */
+  extraEstimateUsdNano?: number;
+  /** Stream the answer text as it arrives (settled at the real cost when the stream ends). */
+  onDelta?: (text: string) => void;
+  /** Admin eval runs: use exactly this model (no registry fallbacks). */
+  modelOverride?: string;
 }
 
 export interface MeteredChatResult {
@@ -49,6 +56,7 @@ export interface MeteredChatResult {
   rawUsdNano: number;
   billedMicro: number;
   cacheHit: boolean;
+  fileText: string | null;
 }
 
 export async function runMeteredChat(
@@ -57,7 +65,9 @@ export async function runMeteredChat(
   input: MeteredChatInput,
 ): Promise<MeteredChatResult> {
   const cfg = await getTaskConfig(db, input.task);
-  const models = [cfg.primaryModel, ...cfg.fallbackModels];
+  const models = input.modelOverride
+    ? [input.modelOverride]
+    : [cfg.primaryModel, ...cfg.fallbackModels];
   const maxTokens = input.maxTokens ?? cfg.maxTokens ?? 1024;
 
   // Worst case over every model that might answer (fallbacks can cost more).
@@ -76,6 +86,7 @@ export async function runMeteredChat(
   }
   const feeBps = await getFeeBps(db);
   const feeOf = (w: Wallet) => feeFor(w, feeBps);
+  rawEstimate += input.extraEstimateUsdNano ?? 0;
   const maxFee = Math.max(...input.payers.map(feeOf));
   const usdInrPaise = await getUsdInrPaise(db);
   const estimate = Math.max(1, usdNanoToBilledMicro(rawEstimate, usdInrPaise, maxFee));
@@ -89,11 +100,13 @@ export async function runMeteredChat(
       maxTokens,
       temperature: cfg.temperature,
       responseFormat: input.responseFormat,
+      plugins: input.plugins,
+      onDelta: input.onDelta,
     });
     const settled = await settleHold(db, hold, {
       userId: input.userId,
       task: input.task,
-      modelRequested: cfg.primaryModel,
+      modelRequested: models[0]!,
       modelUsed: res.model,
       generationId: res.generationId,
       promptTokens: res.promptTokens,
@@ -112,6 +125,7 @@ export async function runMeteredChat(
       rawUsdNano: settled.rawUsdNano,
       billedMicro: settled.billedMicro,
       cacheHit: res.cacheHit,
+      fileText: res.fileText,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -121,7 +135,7 @@ export async function runMeteredChat(
       {
         userId: input.userId,
         task: input.task,
-        modelRequested: cfg.primaryModel,
+        modelRequested: models[0]!,
         modelUsed: null,
         generationId: null,
         promptTokens: null,

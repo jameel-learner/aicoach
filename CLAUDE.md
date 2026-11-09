@@ -23,6 +23,7 @@ Board-exam-aligned AI tutor for Indian students and teachers. Mobile app (studen
   - **During a phase, build and test on LOCAL only.** Don't deploy to staging, set staging secrets or run staging migrations mid-phase.
   - **Only when a phase is complete:** commit + push, CI green, set that phase's new staging secrets, `pnpm deploy:staging`, the user tests on staging, then sign-off.
   - PRODUCTION doesn't exist yet. Never point anything at it.
+  - **Exception (user decision 9.4-1, 2026-11-09):** textbook content lives in one **shared content store** used by LOCAL and STAGING: Vectorize `aicoach-content-chunks` + R2 `aicoach-content`. Processing a PDF happens once; each environment imports the versioned book package into its own D1. Only ever **add** to the shared store; never delete from it in scripts, tests or clean-ups (architecture §3.3).
   - Every phase section in progress.md lists the staging secrets/steps it will need at phase end.
 - **One phase at a time** (§7 of the architecture doc). A phase is done only when its *Test & exit criteria* pass **and the user signs off** after a demo. Don't start the next phase without that sign-off.
 - **Commit only when the user asks** (or when the user has approved a commit-per-phase routine). Never commit secrets.
@@ -50,16 +51,18 @@ TypeScript monorepo (pnpm workspaces + Turborepo) · Expo/React Native (mobile) 
 ```
 apps/mobile      Expo app
 apps/admin-web   React + Vite web app (Admin / POC / Teacher areas); e2e/ = Playwright (LOCAL only)
-apps/worker      Cloudflare Worker: Hono API (src/routes), credits (src/credits), LLM path (src/llm),
+apps/worker      Cloudflare Worker: Hono API (src/routes), credits (src/credits), LLM path + prompts (src/llm),
+                 textbooks + Q&A (src/content: store, chunk, ingest, workflow, import, scope, retrieve, answer),
                  cron (src/cron.ts); scripts/ = make-admin, cleanup-test-data
 packages/core    domain types, Zod schemas, money (micro-INR / nano-USD), LLM task list
 packages/db      Drizzle schema + migrations + seed (reference data only)
 packages/ui-tokens design tokens
+evals/           golden sets (golden/*.jsonl) + runner (run.mjs, LOCAL only); results/ is git-ignored
 docs/            architecture.md (design), progress.md (status), setup-and-deployment.md + environments/
                  (how to run/deploy), engagement-policy.md (review checklist), feature_description.txt (spec)
 
-Planned (create when the phase needs it): packages/rag (retrieval, citations, answer cache, Phase 2),
-packages/journeys (journey graphs, Phase 4), evals/ (golden sets + runner, Phase 2).
+Planned (create when the phase needs it): packages/journeys (journey graphs, Phase 4). Retrieval/citations/cache
+live in apps/worker/src/content (no separate packages/rag needed so far).
 ```
 
 *(Keep this map current when the structure changes.)*
@@ -86,6 +89,8 @@ pm` via Corepack (`corepack enable pnpm --install-directory "$APPDATA/npm"`).
 | Tests (Workers runtime + local D1) | `pnpm test` |
 | Web E2E (needs `dev:worker` running or starts it; LOCAL only, cleans up its test data afterwards) | `pnpm --filter @aicoach/admin-web test:e2e` |
 | Remove leftover test data from the local DB | `pnpm cleanup-test:local` |
+| Lint | `pnpm lint` |
+| Answer-quality evals (LOCAL, needs ingested books) | `node evals/run.mjs --email <admin> --password <pw> [--model <slug>]` |
 | Format | `pnpm format` / `pnpm format:check` |
 | New DB migration | edit `packages/db/src/schema.ts`, then `pnpm db:generate` and `pnpm db:migrate:local` |
 | Mobile bundle check | `cd apps/mobile && npx expo export --platform android --output-dir <tmp>` |

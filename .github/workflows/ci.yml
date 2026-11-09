@@ -25,6 +25,8 @@ jobs:
         run: pnpm format:check
       - name: Typecheck
         run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
       - name: Unit & integration tests (Workers runtime + local D1)
         run: pnpm test
       - name: Build web app

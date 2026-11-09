@@ -528,6 +528,9 @@ export const llmUsage = sqliteTable(
     status: text('status', { enum: ['ok', 'error'] }).notNull(),
     errorMessage: text('error_message'),
     latencyMs: integer('latency_ms'),
+    /** Reconciliation (hourly cron): OpenRouter's own record of the cost, checked later. */
+    reconciledAt: integer('reconciled_at', { mode: 'timestamp_ms' }),
+    reconciledUsdNano: integer('reconciled_usd_nano'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -572,3 +575,142 @@ export const creditRequests = sqliteTable(
     index('credit_requests_parent_idx').on(t.parentWalletId, t.status),
   ],
 );
+
+// =====================================================================
+// Phase 2: Textbooks (architecture §3.3–3.4, decisions 9.2-1 and 9.4-1).
+// Content is processed once into the SHARED content store (R2 package + Vectorize); each
+// environment keeps its own copy of the rows below (ingested here, or imported from the package).
+// Full-text search: virtual table `chunks_fts` (FTS5), created in the migration by hand.
+// =====================================================================
+
+export const books = sqliteTable('books', {
+  /** Global id: the same in every environment that imports the book. */
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  offeringId: text('offering_id')
+    .notNull()
+    .references(() => subjectOfferings.id),
+  edition: text('edition'),
+  language: text('language').notNull().default('en'),
+  pageCount: integer('page_count').notNull().default(0),
+  /** uploaded → splitting → parsing → review → publishing → published (or failed). */
+  status: text('status', {
+    enum: ['uploaded', 'splitting', 'parsing', 'review', 'publishing', 'published', 'failed'],
+  })
+    .notNull()
+    .default('uploaded'),
+  statusMessage: text('status_message'),
+  /** Latest published version in the shared store, e.g. "v1" (null until published). */
+  publishedVersion: text('published_version'),
+  /** Version the next publish will create. */
+  nextVersion: integer('next_version').notNull().default(1),
+  /** ingested here, or imported from the shared store. */
+  source: text('source', { enum: ['ingested', 'imported'] })
+    .notNull()
+    .default('ingested'),
+  workflowId: text('workflow_id'),
+  createdBy: text('created_by').notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const bookPages = sqliteTable(
+  'book_pages',
+  {
+    bookId: text('book_id')
+      .notNull()
+      .references(() => books.id),
+    pageNo: integer('page_no').notNull(),
+    markdown: text('markdown'),
+    /** pending → parsed | failed; Admin review: approved | edited. */
+    status: text('status', { enum: ['pending', 'parsed', 'failed', 'approved', 'edited'] })
+      .notNull()
+      .default('pending'),
+    /** Automatic quality flags for review (e.g. "empty", "short", "garbled"). */
+    flags: text('flags', { mode: 'json' }).$type<string[]>(),
+    error: text('error'),
+    costUsdNano: integer('cost_usd_nano').notNull().default(0),
+    updatedBy: text('updated_by'),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.bookId, t.pageNo] })],
+);
+
+/** Retrieval units. id = `<bookId>:<version>:<chunkNo>` (also the Vectorize vector id). */
+export const chunks = sqliteTable(
+  'chunks',
+  {
+    id: text('id').primaryKey(),
+    bookId: text('book_id')
+      .notNull()
+      .references(() => books.id),
+    version: text('version').notNull(),
+    chunkNo: integer('chunk_no').notNull(),
+    pageFrom: integer('page_from').notNull(),
+    pageTo: integer('page_to').notNull(),
+    /** Nearest heading above the chunk (e.g. "1.5.3 Interest on Drawings"). */
+    section: text('section'),
+    text: text('text').notNull(),
+  },
+  (t) => [index('chunks_book_idx').on(t.bookId, t.version, t.chunkNo)],
+);
+
+/** Which books an institution's learners use, per subject offering (decision 9.2-1). */
+export const institutionBooks = sqliteTable(
+  'institution_books',
+  {
+    institutionId: text('institution_id')
+      .notNull()
+      .references(() => institutions.id),
+    bookId: text('book_id')
+      .notNull()
+      .references(() => books.id),
+    mappedBy: text('mapped_by').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.institutionId, t.bookId] })],
+);
+
+/**
+ * Answer cache (spec 1.3–1.4, architecture §3.6). Per environment. A question asked again in the
+ * same scope (same books + answer profile) returns the stored answer at no cost; "force new"
+ * creates another variant.
+ */
+export const answers = sqliteTable(
+  'answers',
+  {
+    id: id(),
+    /** Sorted book tags + answer profile, e.g. "<bookId>@v1|default". */
+    scopeKey: text('scope_key').notNull(),
+    question: text('question').notNull(),
+    questionNorm: text('question_norm').notNull(),
+    embedding: text('embedding', { mode: 'json' }).$type<number[]>().notNull(),
+    answer: text('answer').notNull(),
+    citations: text('citations', { mode: 'json' }).$type<unknown[]>().notNull(),
+    notInBook: integer('not_in_book', { mode: 'boolean' }).notNull().default(false),
+    variantNo: integer('variant_no').notNull().default(1),
+    model: text('model'),
+    promptVersion: text('prompt_version').notNull(),
+    createdBy: text('created_by'),
+    hits: integer('hits').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('answers_scope_idx').on(t.scopeKey, t.createdAt),
+    index('answers_norm_idx').on(t.scopeKey, t.questionNorm),
+  ],
+);
+
+/** Eval harness results (evals/), shown on the Admin Models screen. */
+export const evalRuns = sqliteTable('eval_runs', {
+  id: id(),
+  model: text('model').notNull(),
+  promptVersion: text('prompt_version').notNull(),
+  questions: integer('questions').notNull(),
+  citationAccuracy: real('citation_accuracy').notNull(),
+  correctness: real('correctness').notNull(),
+  notes: text('notes'),
+  details: text('details', { mode: 'json' }).$type<unknown[]>(),
+  createdBy: text('created_by'),
+  createdAt: createdAt(),
+});

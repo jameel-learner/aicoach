@@ -8,6 +8,8 @@ AI Coach runs in three separate environments. Each has its own guide, database, 
 | **STAGING** | [environments/staging.md](environments/staging.md) | **Only at the end of a phase**, to deploy and test it before moving to the next phase | https://aicoach-api-staging.jameel-outskill.workers.dev |
 | **PRODUCTION** | [environments/production.md](environments/production.md) | Real users. **Not created yet** (before the pilot) | your own domain (planned) |
 
+**Shared between LOCAL and STAGING (from Phase 2):** the textbook content store (Vectorize index `aicoach-content-chunks` + R2 bucket `aicoach-content`). A textbook is processed once and imported into each environment's own database. Everything else (accounts, credits, data) stays separate. See architecture §3.3.
+
 ## Phase workflow
 
 ```
