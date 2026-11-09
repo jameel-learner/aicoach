@@ -5,13 +5,15 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Body, Button, Card, ErrorText, Heading, Screen, Title } from '../../components/ui';
 import { Markdown } from '../../components/Markdown';
 import { api, errorMessage } from '../../lib/api';
-import { askStream, type Citation, type DoneEvent } from '../../lib/ask';
+import { askStream, historyOf, wasRewritten, type Citation, type DoneEvent } from '../../lib/ask';
 import { useEnrolment } from '../../lib/enrolment-context';
 import { useTheme } from '../../lib/theme';
 
 interface Turn {
   id: number;
   question: string;
+  /** The standalone question the server answered (follow-ups are rewritten). */
+  answering?: string;
   text: string;
   done?: DoneEvent;
   error?: string;
@@ -37,10 +39,20 @@ export default function Learn() {
   const update = (id: number, fn: (t: Turn) => Turn) =>
     setTurns((all) => all.map((t) => (t.id === id ? fn(t) : t)));
 
+  // A follow-up ("why is it important?") goes with the last turns so it can be understood.
+  // "Get a new answer" re-asks the already standalone question, so it needs no history.
   async function ask(q: string, forceNew = false) {
     const id = Date.now();
+    const history = forceNew ? [] : historyOf(turns);
     setTurns((all) => [...all, { id, question: q, text: '', pending: true }]);
-    await askStream({ question: q, forceNew, enrolmentId: active?.id }, (e) => {
+    const body = {
+      question: q,
+      forceNew,
+      enrolmentId: active?.id,
+      history: history.length ? history : undefined,
+    };
+    await askStream(body, (e) => {
+      if (e.type === 'meta') update(id, (t) => ({ ...t, answering: e.question }));
       if (e.type === 'delta') update(id, (t) => ({ ...t, text: t.text + e.text }));
       if (e.type === 'done') update(id, (t) => ({ ...t, done: e, text: e.answer, pending: false }));
       if (e.type === 'error') update(id, (t) => ({ ...t, error: e.message, pending: false }));
@@ -74,7 +86,12 @@ export default function Learn() {
           </Card>
         )}
         {turns.map((t) => (
-          <TurnView key={t.id} turn={t} busy={busy} onRetry={() => void ask(t.question, true)} />
+          <TurnView
+            key={t.id}
+            turn={t}
+            busy={busy}
+            onRetry={() => void ask(t.done?.question ?? t.question, true)}
+          />
         ))}
       </ScrollView>
       <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end' }}>
@@ -131,6 +148,11 @@ function TurnView({ turn, busy, onRetry }: { turn: Turn; busy: boolean; onRetry:
       >
         <Text style={{ color: colors.text, fontSize: fontSize.md }}>{turn.question}</Text>
       </View>
+      {turn.answering && wasRewritten(turn.question, turn.answering) && (
+        <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, fontStyle: 'italic' }}>
+          Answering: {turn.answering}
+        </Text>
+      )}
       {turn.error ? (
         <ErrorText error={turn.error} />
       ) : (
@@ -180,7 +202,9 @@ function TurnView({ turn, busy, onRetry }: { turn: Turn; busy: boolean; onRetry:
                 </Text>
               )}
               <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
-                {d.cached ? 'Saved answer · free' : formatInr(d.billedMicro)}
+                {d.cached
+                  ? `Saved answer · ${d.billedMicro ? formatInr(d.billedMicro) : 'free'}`
+                  : formatInr(d.billedMicro)}
               </Text>
               <Button title="Get a new answer" variant="link" disabled={busy} onPress={onRetry} />
             </View>

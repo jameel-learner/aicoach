@@ -167,6 +167,19 @@ export const askSchema = z.object({
   model: z.string().trim().min(3).max(120).optional(),
   /** false → one JSON response (eval runner, simple clients). */
   stream: z.boolean().default(true),
+  /**
+   * The conversation so far (oldest first, at most 3 turns): lets a follow-up like "why is it
+   * important?" be understood (decision 9.5-1). Questions are the standalone ones the server sent back.
+   */
+  history: z
+    .array(
+      z.object({
+        question: z.string().trim().min(1).max(1000),
+        answer: z.string().max(4000),
+      }),
+    )
+    .max(3)
+    .optional(),
 });
 
 /** Eval harness (evals/): judge one answer, and store a run's scores. */

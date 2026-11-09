@@ -10,7 +10,7 @@
 | Sign-in codes & emails | Live Cloudflare log: `pnpm logs:staging` (no real email yet) |
 | Secrets | Stored in Cloudflare (`wrangler secret put … --env staging`); never in git |
 | AI calls (from Phase 1) | Same OpenRouter account; staging usage costs real credits |
-| Live since | 2026-11-08 (Phase 0) · Phase 1 deployed and signed off 2026-11-09 (commit `4a2509b`) · Phase 2: deploy + test pending ([§3c](#3c-phase-2-on-staging-textbooks--ask)) |
+| Live since | 2026-11-08 (Phase 0) · Phase 1 deployed and signed off 2026-11-09 (commit `4a2509b`) · Phase 2 deployed and signed off 2026-11-09 (books imported from the shared store) |
 | Textbooks (from Phase 2) | **Shared with local**: Vectorize `aicoach-content-chunks` + R2 `aicoach-content`. Books are **processed on local only**; staging **imports** them (free) |
 
 Contents: [1. End-of-phase checklist](#1-end-of-phase-checklist) · [2. Deploy](#2-deploy) · [3. Test on staging](#3-test-on-staging) · [3a. Phase 1 on staging](#3a-phase-1-on-staging-credits--ai) · [3b. Why automated browser tests don't run on staging](#3b-why-automated-browser-tests-dont-run-on-staging) · [3c. Phase 2 on staging](#3c-phase-2-on-staging-textbooks--ask) · [4. Secrets & config](#4-secrets--config) · [5. Before real users](#5-before-real-users) · [6. How staging was created](#6-how-staging-was-created) · [7. Troubleshooting](#7-troubleshooting)

@@ -154,7 +154,7 @@ Processes the NCERT books **once** into the shared content store (staging later 
 6. **Publish.** Status becomes *Published v1*; the book appears under *Shared content store* as *Up to date*.
 7. **Institutions using this book:** tick your institution → **Save**.
 8. Repeat 3 to 7 for `accountancy_2.pdf` (*Part II*, 296 pages).
-9. **Ask (web):** on any page, click **Ask your textbook** (bottom right). Ask e.g. *What is goodwill?* The answer streams in, with page badges (click one to see the source text). Ask the same again: *Saved answer · free*. **Get a new answer** makes another version. Try an off-syllabus question (*Who won the 2011 World Cup?*): it says *Not in your textbook*. **Expand** widens the drawer.
+9. **Ask (web):** on any page, click **Ask your textbook** (bottom right). Ask e.g. *What is goodwill?* The answer streams in, with page badges (click one to see the source text). Ask the same again: *Saved answer · free*. **Get a new answer** makes another version. Try an off-syllabus question (*Who won the 2011 World Cup?*): it says *Not in your textbook*. **Expand** widens the drawer. **Follow-ups:** ask *Importance of a balance sheet*, then *What are its limitations?*: the second shows *Answering: What are the limitations of a balance sheet?* and cites the right pages.
 10. **Ask (phone):** as the student, open the **Learn** tab and ask a question. The charge comes from the student's class wallet (then own).
 11. **Evaluation:** in a new terminal, `node evals/run.mjs --email <your admin email> --password <your password>` (≈ US$0.05). It prints citation accuracy (target ≥ 90%) and correctness (target ≥ 85%); **Admin → AI models** shows the scores. Add `--model openai/gpt-4o-mini` to compare models.
 

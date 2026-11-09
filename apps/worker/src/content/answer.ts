@@ -1,7 +1,8 @@
 import { answers, type Db } from '@aicoach/db';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Env, SessionUser } from '../env';
-import { NOT_IN_TEXTBOOK, TUTOR_ANSWER } from '../llm/prompts';
+import { InsufficientCredits } from '../credits/ledger';
+import { NOT_IN_TEXTBOOK, QUERY_REWRITE, TUTOR_ANSWER } from '../llm/prompts';
 import { runMeteredChat } from '../llm/run';
 import { retrieve, type Source } from './retrieve';
 import type { AskScope } from './scope';
@@ -26,11 +27,20 @@ export interface Citation {
 }
 
 export type AskEvent =
-  | { type: 'meta'; cached: boolean; books: { id: string; title: string }[]; context: string }
+  | {
+      type: 'meta';
+      cached: boolean;
+      books: { id: string; title: string }[];
+      context: string;
+      /** The standalone question actually answered (differs from the typed one for follow-ups). */
+      question: string;
+    }
   | { type: 'delta'; text: string }
   | {
       type: 'done';
       answerId: string;
+      /** The standalone question actually answered (see meta). */
+      question: string;
       answer: string;
       citations: Citation[];
       notInBook: boolean;
@@ -154,6 +164,43 @@ export interface AskInput {
   forceNew?: boolean;
   /** Admin only: answer with this model (eval runs). */
   model?: string;
+  /** Earlier turns (oldest first, ≤ 3): a follow-up is rewritten into a standalone question. */
+  history?: { question: string; answer: string }[];
+}
+
+/**
+ * Follow-ups (decision 9.5-1): "why is it important?" → "Why is a balance sheet important?".
+ * One cheap call, charged to the same payers. On an LLM error the typed message is used as is.
+ */
+async function standaloneQuestion(
+  env: Env,
+  db: Db,
+  me: SessionUser,
+  scope: AskScope,
+  message: string,
+  history: { question: string; answer: string }[],
+): Promise<{ question: string; billedMicro: number }> {
+  try {
+    const res = await runMeteredChat(env, db, {
+      task: 'query_rewrite',
+      payers: scope.payers,
+      userId: me.id,
+      maxTokens: 120,
+      messages: [
+        { role: 'system', content: QUERY_REWRITE.system },
+        { role: 'user', content: QUERY_REWRITE.user(history.slice(-3), message) },
+      ],
+    });
+    const line = (res.content.split('\n').find((l) => l.trim()) ?? '')
+      .trim()
+      .replace(/^["'“”]+|["'“”]+$/g, '')
+      .slice(0, 1000);
+    return { question: line.length >= 3 ? line : message, billedMicro: res.billedMicro };
+  } catch (err) {
+    if (err instanceof InsufficientCredits) throw err;
+    console.warn('query rewrite failed; answering the message as typed', err);
+    return { question: message, billedMicro: 0 };
+  }
 }
 
 /** Answers a question, emitting events as it goes. Throws InsufficientCredits/LlmError before any delta. */
@@ -165,7 +212,15 @@ export async function answerQuestion(
   input: AskInput,
   emit: (e: AskEvent) => void,
 ) {
-  const question = input.question.trim();
+  // A follow-up becomes a standalone question first; it then drives cache, retrieval and the answer,
+  // so a stored answer never depends on hidden conversation.
+  let question = input.question.trim();
+  let rewriteBilled = 0;
+  if (input.history?.length) {
+    const r = await standaloneQuestion(env, db, me, scope, question, input.history);
+    question = r.question;
+    rewriteBilled = r.billedMicro;
+  }
   const norm = normaliseQuestion(question);
   const scopeKey = scopeKeyOf(scope);
   const books = scope.books.map((b) => ({ id: b.id, title: b.title }));
@@ -183,18 +238,19 @@ export async function answerQuestion(
         .update(answers)
         .set({ hits: sql`${answers.hits} + 1` })
         .where(eq(answers.id, hit.id));
-      emit({ type: 'meta', cached: true, books, context: scope.context.label });
+      emit({ type: 'meta', cached: true, books, context: scope.context.label, question });
       const citations = hit.citations as Citation[];
       emit({
         type: 'done',
         answerId: hit.id,
+        question,
         answer: hit.answer,
         citations,
         notInBook: hit.notInBook,
         uncertain: !hit.notInBook && (!citations.length || citations.some((c) => !c.supported)),
         cached: true,
         variantNo: hit.variantNo,
-        billedMicro: 0,
+        billedMicro: rewriteBilled, // the stored answer is free; only a follow-up rewrite costs
         model: me.role === 'admin' ? hit.model : null,
       });
       return;
@@ -211,7 +267,7 @@ export async function answerQuestion(
       questionVector: vector,
     },
   );
-  emit({ type: 'meta', cached: false, books, context: scope.context.label });
+  emit({ type: 'meta', cached: false, books, context: scope.context.label, question });
 
   let answer: string;
   let model: string | null = null;
@@ -289,13 +345,14 @@ export async function answerQuestion(
   emit({
     type: 'done',
     answerId: row.id,
+    question,
     answer: text,
     citations,
     notInBook,
     uncertain,
     cached: false,
     variantNo,
-    billedMicro: billed,
+    billedMicro: billed + rewriteBilled,
     model: me.role === 'admin' ? model : null,
   });
 }

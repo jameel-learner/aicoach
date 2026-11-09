@@ -16,6 +16,11 @@ export interface MockState {
   parsedFiles: string[];
   /** The assistant's reply (streamed in pieces when the request asks for a stream). */
   answer: string;
+  /** Per-request reply (e.g. for the query-rewrite call); undefined → `answer`. */
+  replyFor:
+    ((body: { messages?: { role: string; content: unknown }[] }) => string | undefined) | null;
+  /** System prompts of chat requests, in order (to see which prompts were called). */
+  systems: string[];
   /** What OpenRouter's /generation endpoint reports later (reconciliation); default = costUsd. */
   generationCostUsd: number | null;
 }
@@ -85,6 +90,8 @@ export function installOpenRouterMock(): MockState {
 Parsed text of ${filename}.`,
     parsedFiles: [],
     answer: 'mock answer',
+    replyFor: null,
+    systems: [],
     generationCostUsd: null,
   };
   const realFetch = globalThis.fetch;
@@ -109,6 +116,9 @@ Parsed text of ${filename}.`,
           models: body.models,
           max_tokens: body.max_tokens,
         });
+        const system = (body.messages ?? []).find((m: { role: string }) => m.role === 'system');
+        state.systems.push(typeof system?.content === 'string' ? system.content : '');
+        const reply = state.replyFor?.(body) ?? state.answer;
         if (state.delayMs) await new Promise((r) => setTimeout(r, state.delayMs));
         if (state.fail) {
           return Response.json(
@@ -118,7 +128,7 @@ Parsed text of ${filename}.`,
         }
         if (body.stream) {
           const id = `gen-test-${state.requests.length}`;
-          const pieces = state.answer.match(/[\s\S]{1,12}/g) ?? [];
+          const pieces = reply.match(/[\s\S]{1,12}/g) ?? [];
           const lines = [
             ': OPENROUTER PROCESSING',
             ...pieces.map(
@@ -166,7 +176,7 @@ ${state.parseText(f)}
               {
                 message: {
                   role: 'assistant',
-                  content: state.answer,
+                  content: reply,
                   ...(annotations.length ? { annotations } : {}),
                 },
               },

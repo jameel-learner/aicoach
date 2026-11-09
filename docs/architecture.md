@@ -254,6 +254,8 @@ flowchart LR
 - **"Not in your textbook"**: the prompt makes the model start with a marker that the server strips; no retrieval hits → the same answer without an LLM call.
 - **Clients**: phone Learn tab and a web drawer ("Ask your textbook", floating on every page, expandable). Formulas are plain text (prompt rule), so no KaTeX is needed on the phone.
 
+**Follow-up questions (decision 9.5-1, Phase 3):** Ask is a short conversation, not isolated questions. The client sends the **last 3 turns** (standalone question + answer, answers truncated) with each new question. When there is history, one cheap `query_rewrite` call (prompt `query_rewrite@1`, charged to the same payers) turns the message into a **standalone question** ("why is it important?" → "Why is a balance sheet important?"). That standalone question is used for the cache key, retrieval and the answer prompt, so an answer never depends on hidden history and cached answers stay valid. The UI shows *Answering: …* when the question was rewritten. No history → no extra call. A rewrite failure falls back to the message as typed. Full multi-turn tutoring (Socratic checks, hints) remains the Phase 4 session engine.
+
 ### 3.7 Session engine: journeys as state graphs
 
 Each journey is a **typed state graph** that runs inside a Session Agent (Durable Object). The graph definition is plain TypeScript (nodes = steps, edges = guarded transitions), which can be unit-tested without an LLM. The DO persists a checkpoint after every node, so a learner can **stop at any logical point and resume** (2.3.2) on any device.
@@ -680,7 +682,7 @@ Each phase ends with a **deployable, demoable slice** plus automated tests and e
 **Test & exit criteria:** ledger invariant property tests (no negative balances with 50 concurrent calls on one wallet; `issued = Σ balances + Σ billed`). Lock requires acknowledgement. An edit clears the acknowledgement. A locked allotment rejects every change. Billing = raw × 1.10 with exact integer rounding. Gateway cache hit charged 0. Visibility tests: each role can't read beyond its immediate downline (Admin can). A model switch takes effect without a redeploy. Reconciliation difference vs OpenRouter < 0.5%.
 
 ### Phase 2: Textbook ingestion & grounded Q&A
-> **Status: ✅ signed off on LOCAL 2026-11-09** (staging test pending). Exit measured: reconciliation 0.0% difference, cache hit ~30 ms, correctness 91.7%, citation 87.5% (Part I only). Carried into Phase 3: Part II ingestion + re-run evals, two citation misses, LaTeX rendering. Changes made during the phase: shared content store (9.4-1), enrolment removal (9.4-2), web "Ask your textbook" drawer. Books are processed only on LOCAL; staging imports them (no Workflow on staging).
+> **Status: ✅ done 2026-11-09** (signed off on LOCAL and STAGING; commits `6cd3f67`, `27959d6`, `a4b5a8f`). Exit measured: reconciliation 0.0% difference, cache hit ~30 ms, correctness 91.7%, citation 87.5% (Part I only). Carried into Phase 3: Part II ingestion + re-run evals, two citation misses, LaTeX rendering. Changes made during the phase: shared content store (9.4-1), enrolment removal (9.4-2), web "Ask your textbook" drawer. Books are processed only on LOCAL; staging imports them (no Workflow on staging).
 
 **Goal:** upload a textbook and ask questions that get answers with page citations.
 
@@ -700,6 +702,8 @@ Each phase ends with a **deployable, demoable slice** plus automated tests and e
 **Test & exit criteria:** parsing fixtures pass (multi-column reading order, LaTeX, tables). Golden-set citation accuracy ≥ 90%, answer correctness ≥ 85% (judge + human sample). Cache hit returns in < 300 ms. Force-new creates a variant.
 
 ### Phase 3: Board strategy & pre-generated learning assets
+> **Status: 🟡 started 2026-11-09.** First item (user request): follow-up questions in Ask (decision 9.5-1). Also carried from Phase 2: Part II evals, two citation misses, LaTeX rendering.
+
 **Goal:** board guidelines drive generated notes, memory maps and a question bank.
 
 - Guideline ingestion → `CompileStrategy` Workflow → admin-reviewed `ExamStrategy` (§3.5)
@@ -870,3 +874,9 @@ With one developer (you + Claude), phases run **in order, 0 → 9**. Each phase 
 |---|---|---|
 | 1 | Vector search for LOCAL vs STAGING | **One shared content store** (Vectorize `aicoach-content-chunks` + R2 `aicoach-content`) for LOCAL and STAGING, so each PDF is processed **once**. Environments import immutable, versioned book packages into their own D1. An explicit exception to the environment-separation rule, limited to textbook content (§3.3) |
 | 2 | Removing a learner from a class or self-study subject (user request, walkthrough) | **Admin → Users → Classes & subjects → Remove.** The enrolment is kept with status `removed` (re-joining reactivates it). A student's unused class-wallet balance returns to the **class** wallet and their pending requests from it are cancelled; their own (direct) credits stay. A class teacher's enrolment is ended via *Change teacher* instead. Ask your textbook ignores an enrolment id that isn't the student's active one and uses their first subject (`src/enrolments.ts`, `src/content/scope.ts`) |
+
+### 9.5 Follow-up decisions (2026-11-09, Phase 3 start)
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Follow-up questions in Ask ("…and why is **it** important?") were answered without context (user, staging) | Fix in Phase 3, before Phase 4 (user). Client sends the last 3 turns; when present, a `query_rewrite` call makes a standalone question, which drives cache, retrieval and the answer; UI shows *Answering: …* (§3.6). Charged like any call; no history → no extra call |

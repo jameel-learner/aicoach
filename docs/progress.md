@@ -7,11 +7,11 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 2: Textbook ingestion & grounded Q&A: **signed off on LOCAL by the user 2026-11-09**, committed; staging deploy + test ([staging.md §3c](environments/staging.md#3c-phase-2-on-staging-textbooks--ask)) is the last step. Phase 3 starts after that |
+| **Current phase** | Phase 3: Board strategy & pre-generated learning assets (🟡 started 2026-11-09; first item: follow-up questions in Ask, user request) |
 | **Last updated** | 2026-11-09 |
 | **Build / tests** | All green: typecheck, lint, 54 worker + 8 core tests (`pnpm test`), 4 Playwright browser tests (`test:e2e`; test data removed afterwards), web build, Android bundle builds |
 | **Blockers** | None |
-| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live with Phase 1, commit `4a2509b`; Phase 2 deploy pending, see staging.md §3c; codes via `pnpm logs:staging`) |
+| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (live with Phase 2; books imported from the shared store; codes via `pnpm logs:staging`) |
 
 Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria passed + user sign-off) · ⛔ blocked
 
@@ -92,7 +92,8 @@ Commits `c3a51f9` (phase) + `4a2509b` (class-teacher reassignment). Backend: **1
 - **Deferred to Phase 2:** streaming responses; generation-endpoint reconciliation cron; eval scores on the Models screen. **Deferred (no phase yet):** usage roll-up table (live aggregates are fast enough at pilot scale); low-balance alert emails.
 - **Staging (done 2026-11-09):** `OPENROUTER_API_KEY` secret set; `pnpm deploy:staging` applied migration 0001; models synced; user walked through the 13-step credits & AI flow on staging.
 
-### Phase 2: Textbook ingestion & grounded Q&A ✅ on LOCAL (user sign-off 2026-11-09; staging test pending)
+### Phase 2: Textbook ingestion & grounded Q&A ✅ (2026-11-09, signed off on LOCAL and STAGING)
+Commits `6cd3f67` (phase), `27959d6` (staging refuses uploads), `a4b5a8f` (continue a stopped run). Both NCERT books (Part I + II) published on LOCAL; staging imports them from the shared store (user tested Ask there).
 Pilot book: NCERT Accountancy Class 12, Parts I & II (`docs/textbooks/accountancy_1.pdf`, `accountancy_2.pdf`).
 
 **Carried over / housekeeping**
@@ -141,7 +142,30 @@ Pilot book: NCERT Accountancy Class 12, Parts I & II (`docs/textbooks/accountanc
 - **Carried into Phase 3 (accepted by the user):** upload + publish **Part II** on LOCAL (then *Import* it on staging) and re-run the evals on both books with the registry model; the two real citation misses (p1-15, p1-18); LaTeX in parsed pages (`$\frac{1}{5}$`) isn't rendered on web/phone; add journal-entry / table / figure golden questions
 - **Phase-end staging steps (final, see [staging.md §3c](environments/staging.md#3c-phase-2-on-staging-textbooks--ask)):** no new secrets and no new Cloudflare resources (the shared Vectorize index + R2 bucket and Workers AI are already bound under `env.staging`). **No Workflow on staging on purpose:** books are processed only on LOCAL; staging refuses uploads with "Process books on local, then import them here." (user request; the upload card shows that text instead of the form), so no unprocessable PDF reaches the shared store `pnpm deploy:staging` applies migrations 0002 + 0003; then Admin → Textbooks → **Import** (free, no OpenRouter calls), map the staging institution, try Ask on web + phone. Workers Paid only if the import or Ask hits error 1102 (CPU limit)
 
-### Phases 3–9 ⬜
+### Phase 3: Board strategy & pre-generated learning assets 🟡 (started 2026-11-09)
+
+**First (user request, decision 9.5-1): follow-up questions in Ask**
+- [x] `askSchema.history` (last 3 turns); `query_rewrite@1` prompt; `answerQuestion` rewrites to a standalone question when there is history (charged to the same payers; falls back to the typed text on an LLM error)
+- [x] Standalone question drives cache key, retrieval and the answer prompt; events carry it (`meta.question`, `done.question`); rewrite cost included in `billedMicro` (also on a cache hit)
+- [x] Web drawer + phone: send history, show *Answering: …* when rewritten; "Get a new answer" re-asks the standalone question
+- [x] Tests: follow-up with "it" rewritten + used for retrieval/cache; no history → no extra call; rewrite failure → typed text; charge
+
+**Carried from Phase 2**
+- [ ] Re-run the evals on both books with the registry model (Part II now published); fix the citation misses (p1-15, p1-18) if they persist
+- [ ] Render LaTeX from parsed pages (web: KaTeX; phone: plain-text conversion or renderer)
+- [ ] Add journal-entry / table / figure golden questions
+
+**Phase 3 scope (architecture §7)**
+- [ ] Guideline ingestion → `CompileStrategy` Workflow → admin-reviewed `ExamStrategy` (§3.5)
+- [ ] `GenerateAssets` Workflow (Generator → Critic → Fixer): notes per marks weightage, memory maps / quick cards, question bank (marks, typology, model answers, marking-scheme points, dedup), "why this matters"
+- [ ] Concept graph (prerequisites)
+- [ ] Teacher/admin review & approve UI for generated assets
+- [ ] Mobile: browse notes/cards per chapter, marks badges, offline caching
+- [ ] **Exit:** ExamStrategy schema-valid and matches the official KSEAB 2nd PUC Accountancy blueprint; teacher rubric ≥ 4/5 on sample notes; every asset cites sources; regeneration idempotent + versioned; user sign-off
+- **Needs from the user (before the strategy work):** the official KSEAB 2nd PUC Accountancy blueprint / model papers (PDF) in `docs/textbooks/` (git-ignored)
+- **Phase-end staging steps (planned):** `pnpm deploy:staging` (new migrations); no new secrets expected
+
+### Phases 4–9 ⬜
 Checklists are expanded from architecture §7 when the phase starts.
 
 ---
@@ -246,3 +270,7 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Committed Phase 2. Next: user runs staging.md §3c (deploy, import, test), then Phase 3.
 - User request: staging's upload refuses PDFs ("Process books on local, then import them here."). Server check `processingEnabled` (Workflow bound or test) in `routes/books.ts` + `GET /api/admin/books/settings`; web hides the upload form. 55 worker tests green.
 - Bug (user, Part II reading): my code change during the user's 296-page run reloaded `wrangler dev`, which killed the local Workflow at page 76; the book stayed "parsing" and the parse button was refused ("already being processed") for ever. Fixed: a busy book with no progress for 10 minutes is `stalled` (`isStalled` in `routes/books.ts`); the book page shows *Reading stopped* + **Continue reading** (or Publish for a stopped publish), and the server allows the restart. Reading skips pages already done. Test in `content.test.ts`; 56 worker tests green. Lesson: don't change worker code while the user's local ingestion is running.
+
+### 2026-11-09 (Phase 2 sign-off, Phase 3 start)
+- User: Phase 2 good on staging → Phase 2 ✅. Observation on staging: a follow-up using "it" lost the topic, because each question was answered on its own. User decision: fix it first in Phase 3 (decision 9.5-1).
+- Built follow-ups (decision 9.5-1): `query_rewrite@1` (src/llm/prompts.ts), `standaloneQuestion` in src/content/answer.ts, `history` in askSchema, web drawer + phone send the last 3 turns and show *Answering: …*. Test in ask.test.ts (57 worker tests green; lint, typecheck, web build, Android bundle green). Real check on LOCAL (gemini-2.5-flash): "importance of a balance sheet" → "who prepares it and when?" became "Who prepares a balance sheet and when is a balance sheet prepared?" → "what are its limitations?" became "What are the limitations of a balance sheet?", all cited from Part II. Not committed yet.

@@ -207,6 +207,77 @@ describe('ask your textbook', () => {
     expect(or.requests.length).toBe(before + 2);
   });
 
+  it('understands follow-ups: rewrites "it" into a standalone question that drives search + cache', async () => {
+    const t = await setup();
+    const isRewrite = (body: { messages?: { role: string; content: unknown }[] }) =>
+      String(body.messages?.[0]?.content ?? '').startsWith(
+        "You rewrite a student's latest message",
+      );
+    or.costUsd = 0.0001; // each call: $0.0001 × 88 × 1.10 = 9,680 micro-INR to a student
+    or.answer = 'Goodwill is the value of the reputation of a firm [S1].';
+    const before = or.requests.length;
+    const first = await json(
+      await ask(t.student.jar, { question: 'What is goodwill?', stream: false }),
+    );
+    // No history → no rewrite call
+    expect(or.requests.length).toBe(before + 1);
+    expect(first.question).toBe('What is goodwill?');
+
+    or.replyFor = (body) => (isRewrite(body) ? 'Why is goodwill important?' : undefined);
+    or.answer = 'Goodwill matters because it reflects profits above normal profits [S1].';
+    const history = [{ question: first.question, answer: first.answer }];
+    const follow = await json(
+      await ask(t.student.jar, { question: 'why is it important?', history, stream: false }),
+    );
+    expect(or.requests.length).toBe(before + 3); // rewrite + answer
+    expect(follow).toMatchObject({
+      type: 'done',
+      question: 'Why is goodwill important?',
+      cached: false,
+      billedMicro: 2 * 9_680, // the rewrite is charged like any call
+    });
+    // The rewrite saw the conversation; the search used the standalone question (finds page 2)
+    expect(follow.citations.map((c: any) => c.page)).toEqual([2]);
+    expect(or.systems.at(-2)).toMatch(/^You rewrite/);
+    expect(or.systems.at(-1)).toMatch(/^You are AI Coach/);
+
+    // Same follow-up again: one rewrite call, then the stored answer (only the rewrite is charged)
+    const again = await json(
+      await ask(t.student.jar, { question: 'why is it important?', history, stream: false }),
+    );
+    expect(again).toMatchObject({ cached: true, billedMicro: 9_680, answer: follow.answer });
+    expect(or.requests.length).toBe(before + 4);
+    // …and the standalone question asked directly hits the same stored answer, free
+    const direct = await json(
+      await ask(t.student.jar, { question: 'Why is goodwill important?', stream: false }),
+    );
+    expect(direct).toMatchObject({ cached: true, billedMicro: 0 });
+    expect(or.requests.length).toBe(before + 4);
+
+    // Streaming carries the standalone question in meta and done
+    or.replyFor = (body) => (isRewrite(body) ? 'What is a revaluation account?' : undefined);
+    or.answer = 'It records changes in the values of assets and liabilities [S1].';
+    const events = await sse(
+      await ask(t.student.jar, { question: 'and the other account?', history }),
+    );
+    expect(events[0]).toMatchObject({ type: 'meta', question: 'What is a revaluation account?' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      question: 'What is a revaluation account?',
+    });
+
+    // The rewrite fails → the message is answered as typed (no error for the student)
+    or.replyFor = (body) => {
+      if (isRewrite(body)) throw new Error('provider down');
+      return undefined;
+    };
+    or.answer = 'A partnership shares profits [S1].';
+    const fallback = await json(
+      await ask(t.student.jar, { question: 'tell me about partnership', history, stream: false }),
+    );
+    expect(fallback).toMatchObject({ type: 'done', question: 'tell me about partnership' });
+  });
+
   it('says "not in your textbook" without leaking the marker, and flags uncertain answers', async () => {
     const t = await setup();
     or.answer =

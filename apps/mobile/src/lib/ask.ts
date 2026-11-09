@@ -16,6 +16,7 @@ export interface Citation {
 export type DoneEvent = {
   type: 'done';
   answerId: string;
+  question: string;
   answer: string;
   citations: Citation[];
   notInBook: boolean;
@@ -26,14 +27,41 @@ export type DoneEvent = {
   model: string | null;
 };
 export type AskEvent =
-  | { type: 'meta'; cached: boolean; books: { id: string; title: string }[]; context: string }
+  | {
+      type: 'meta';
+      cached: boolean;
+      books: { id: string; title: string }[];
+      context: string;
+      /** The standalone question answered (a follow-up is rewritten, decision 9.5-1). */
+      question: string;
+    }
   | { type: 'delta'; text: string }
   | DoneEvent
   | { type: 'error'; code: string; message: string };
 
+export interface HistoryTurn {
+  question: string;
+  answer: string;
+}
+/** The last 3 answered turns (standalone questions, shortened answers): context for follow-ups. */
+export function historyOf(turns: { done?: { question: string; answer: string } }[]): HistoryTurn[] {
+  return turns
+    .flatMap((t) =>
+      t.done ? [{ question: t.done.question, answer: t.done.answer.slice(0, 1500) }] : [],
+    )
+    .slice(-3);
+}
+const norm = (q: string) =>
+  q
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+/** True when the server answered a rewritten (standalone) version of what was typed. */
+export const wasRewritten = (typed: string, answered: string) => norm(typed) !== norm(answered);
+
 /** expo/fetch supports streamed response bodies (React Native's built-in fetch doesn't). */
 export async function askStream(
-  body: { question: string; enrolmentId?: string; forceNew?: boolean },
+  body: { question: string; enrolmentId?: string; forceNew?: boolean; history?: HistoryTurn[] },
   onEvent: (e: AskEvent) => void,
 ): Promise<void> {
   const cookie = await authClient.getCookie();

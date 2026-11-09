@@ -6,6 +6,25 @@
 
 export const NOT_IN_TEXTBOOK = 'NOT_IN_TEXTBOOK:';
 
+/** Follow-ups (decision 9.5-1): turn the latest message into a standalone question. */
+export const QUERY_REWRITE = {
+  version: 'query_rewrite@1',
+  system: [
+    "You rewrite a student's latest message in a textbook Q&A chat as ONE standalone question.",
+    'Replace pronouns and references ("it", "this", "that method", "the second one") with what they refer to in the conversation.',
+    "Keep the student's intent and wording; do not answer it and do not add new topics.",
+    'If the message is already standalone, or starts a new topic, return it unchanged.',
+    'Output only the question, on one line, without quotes.',
+  ].join('\n'),
+  user: (history: { question: string; answer: string }[], message: string) =>
+    [
+      'Conversation so far:',
+      ...history.map((t) => `Student: ${t.question}\nTutor: ${t.answer.slice(0, 600)}`),
+      '',
+      `Latest message: ${message}`,
+    ].join('\n\n'),
+} as const;
+
 export const TUTOR_ANSWER = {
   version: 'tutor_answer@1',
   system: (subject: string) =>

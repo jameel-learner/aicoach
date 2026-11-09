@@ -5,11 +5,20 @@ import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '../lib/api';
-import { askStream, withCitationLinks, type AskEvent, type Citation } from '../lib/ask';
+import {
+  askStream,
+  historyOf,
+  wasRewritten,
+  withCitationLinks,
+  type AskEvent,
+  type Citation,
+} from '../lib/ask';
 
 interface Turn {
   id: number;
   question: string;
+  /** The standalone question the server answered (follow-ups are rewritten). */
+  answering?: string;
   text: string;
   done?: Extract<AskEvent, { type: 'done' }>;
   error?: string;
@@ -58,14 +67,23 @@ export function AskDrawer({ me }: { me: MeResponse }) {
   const update = (id: number, fn: (t: Turn) => Turn) =>
     setTurns((all) => all.map((t) => (t.id === id ? fn(t) : t)));
 
+  // A follow-up ("why is it important?") goes with the last turns so it can be understood.
+  // "Get a new answer" re-asks the already standalone question, so it needs no history.
   async function ask(q: string, forceNew = false) {
     const id = Date.now();
+    const history = forceNew ? [] : historyOf(turns);
     setTurns((all) => [...all, { id, question: q, text: '', pending: true }]);
     abort.current = new AbortController();
     try {
       await askStream(
-        { question: q, forceNew, classGroupId: classGroupId || undefined },
+        {
+          question: q,
+          forceNew,
+          classGroupId: classGroupId || undefined,
+          history: history.length ? history : undefined,
+        },
         (e) => {
+          if (e.type === 'meta') update(id, (t) => ({ ...t, answering: e.question }));
           if (e.type === 'delta') update(id, (t) => ({ ...t, text: t.text + e.text }));
           if (e.type === 'done')
             update(id, (t) => ({ ...t, done: e, text: e.answer, pending: false }));
@@ -165,7 +183,7 @@ export function AskDrawer({ me }: { me: MeResponse }) {
                 <TurnView
                   key={t.id}
                   turn={t}
-                  onRetry={() => void ask(t.question, true)}
+                  onRetry={() => void ask(t.done?.question ?? t.question, true)}
                   disabled={busy}
                 />
               ))}
@@ -226,6 +244,11 @@ function TurnView({
   return (
     <div>
       <p className="mb-2 rounded-lg bg-surface-muted px-3 py-2 font-medium">{turn.question}</p>
+      {turn.answering && wasRewritten(turn.question, turn.answering) && (
+        <p className="mb-2 text-xs text-muted">
+          Answering: <span className="italic">{turn.answering}</span>
+        </p>
+      )}
       {turn.error ? (
         <p role="alert" className="text-danger">
           {turn.error}
@@ -294,7 +317,7 @@ function TurnView({
                 </span>
               )}
               {d.cached ? (
-                <span>Saved answer · free</span>
+                <span>Saved answer · {d.billedMicro ? formatInr(d.billedMicro) : 'free'}</span>
               ) : (
                 <span>{formatInr(d.billedMicro)}</span>
               )}

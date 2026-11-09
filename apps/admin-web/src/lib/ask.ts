@@ -10,11 +10,19 @@ export interface Citation {
   supported: boolean;
 }
 export type AskEvent =
-  | { type: 'meta'; cached: boolean; books: { id: string; title: string }[]; context: string }
+  | {
+      type: 'meta';
+      cached: boolean;
+      books: { id: string; title: string }[];
+      context: string;
+      /** The standalone question answered (a follow-up is rewritten, decision 9.5-1). */
+      question: string;
+    }
   | { type: 'delta'; text: string }
   | {
       type: 'done';
       answerId: string;
+      question: string;
       answer: string;
       citations: Citation[];
       notInBook: boolean;
@@ -30,7 +38,28 @@ export interface AskBody {
   question: string;
   classGroupId?: string;
   forceNew?: boolean;
+  history?: HistoryTurn[];
 }
+
+export interface HistoryTurn {
+  question: string;
+  answer: string;
+}
+/** The last 3 answered turns (standalone questions, shortened answers): context for follow-ups. */
+export function historyOf(turns: { done?: { question: string; answer: string } }[]): HistoryTurn[] {
+  return turns
+    .flatMap((t) =>
+      t.done ? [{ question: t.done.question, answer: t.done.answer.slice(0, 1500) }] : [],
+    )
+    .slice(-3);
+}
+const norm = (q: string) =>
+  q
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+/** True when the server answered a rewritten (standalone) version of what was typed. */
+export const wasRewritten = (typed: string, answered: string) => norm(typed) !== norm(answered);
 
 export async function askStream(
   body: AskBody,
