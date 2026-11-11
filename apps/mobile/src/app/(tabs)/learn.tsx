@@ -1,4 +1,4 @@
-import { formatInr } from '@aicoach/core';
+import { formatInr, mathToText } from '@aicoach/core';
 import { useQuery } from '@tanstack/react-query';
 import { useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -227,7 +227,9 @@ function TurnView({ turn, busy, onRetry }: { turn: Turn; busy: boolean; onRetry:
                 {cite.bookTitle} · page {cite.page}
                 {cite.section ? ` · ${cite.section}` : ''}
               </Text>
-              <Text style={{ color: colors.textMuted, marginTop: 4 }}>{cite.snippet}…</Text>
+              <Text style={{ color: colors.textMuted, marginTop: 4 }}>
+                {mathToText(cite.snippet)}…
+              </Text>
             </Pressable>
           )}
           {d && (

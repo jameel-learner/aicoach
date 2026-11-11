@@ -659,6 +659,18 @@ function PapersFound({
     },
   });
 
+  if (papers.data?.length === 0)
+    return (
+      <Card title="Papers found">
+        <p className="text-sm text-muted">
+          Papers found are kept on local, where the strategy is compiled. An imported strategy
+          brings its results (chapter marks, topic frequency, timing, checks), not the tagged past
+          questions. To review or correct the papers, do it on local, then publish and import the
+          material again.
+        </p>
+      </Card>
+    );
+
   return (
     <Card title="Papers found">
       <p className="mb-3 text-sm text-muted">

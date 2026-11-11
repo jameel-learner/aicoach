@@ -1,3 +1,4 @@
+import { mathToText } from '@aicoach/core';
 import { answers, type Db } from '@aicoach/db';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Env, SessionUser } from '../env';
@@ -154,7 +155,8 @@ export function verifyCitations(answer: string, sources: Source[]) {
             bookTitle: src.bookTitle,
             page: src.page,
             section: src.section,
-            snippet: src.text.slice(0, 280),
+            // Formulas as plain text: snippets are shown as text on the web and the phone.
+            snippet: mathToText(src.text).slice(0, 280),
             supported,
           }
         : null;

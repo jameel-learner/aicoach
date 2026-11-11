@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Badge, Button, Card, ErrorText, PageHeader, Table, Td } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
+import { rehypePlugins, remarkPlugins } from '../../lib/markdown';
 import {
   BOOK_STATUS,
   BUSY,
@@ -355,9 +357,19 @@ function PageReview({
         }
       />
       <p className="mt-2 text-xs text-muted">
-        The text is Markdown: tables use | columns |, headings start with #. Fix only what's wrong;
-        approving every page isn't required to publish.
+        The text is Markdown: tables use | columns |, headings start with #, formulas are LaTeX
+        between $ signs. Fix only what's wrong; approving every page isn't required to publish.
       </p>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-sm font-medium text-primary">
+          Show formatted (tables and formulas as students see them)
+        </summary>
+        <div className="prose-answer mt-2 overflow-x-auto rounded border border-border p-3 text-sm leading-relaxed [&_table]:my-2 [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_th]:border [&_th]:border-border [&_th]:bg-surface-muted [&_th]:px-2">
+          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+            {text}
+          </ReactMarkdown>
+        </div>
+      </details>
     </Card>
   );
 }

@@ -1,3 +1,4 @@
+import { mathToText } from '@aicoach/core';
 import { Fragment, type ReactNode } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useTheme } from '../lib/theme';
@@ -5,7 +6,8 @@ import { useTheme } from '../lib/theme';
 /**
  * Small Markdown renderer for tutor answers: headings, paragraphs, bullet/numbered lists, tables
  * (horizontally scrollable), **bold**, and [S#] citation markers rendered as tappable page badges.
- * Deliberately limited to what the tutor prompt produces (plain-text formulas, no LaTeX).
+ * Deliberately limited to what the tutor prompt produces. LaTeX formulas ($…$, copied from the
+ * textbook) are shown as plain text (decision 9.5-9).
  */
 export function Markdown({
   text,
@@ -32,7 +34,7 @@ export function Markdown({
     });
 
   const blocks: ReactNode[] = [];
-  const lines = text.split('\n');
+  const lines = mathToText(text).split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (!line.trim()) continue;

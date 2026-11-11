@@ -1,10 +1,10 @@
 import type { MeResponse } from '@aicoach/core';
-import { formatInr } from '@aicoach/core';
+import { formatInr, mathToText } from '@aicoach/core';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { api } from '../lib/api';
+import { rehypePlugins, remarkPlugins } from '../lib/markdown';
 import {
   askStream,
   historyOf,
@@ -261,7 +261,8 @@ function TurnView({
             </p>
           )}
           <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={rehypePlugins}
             components={{
               a: ({ href, children }) => {
                 const m = /^#cite-(\d+)$/.exec(href ?? '');
@@ -306,7 +307,7 @@ function TurnView({
                 {openCite.bookTitle} · page {openCite.page}
                 {openCite.section ? ` · ${openCite.section}` : ''}
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-muted">{openCite.snippet}…</p>
+              <p className="mt-1 whitespace-pre-wrap text-muted">{mathToText(openCite.snippet)}…</p>
             </div>
           )}
           {d && (

@@ -53,11 +53,15 @@ apps/mobile      Expo app
 apps/admin-web   React + Vite web app (Admin / POC / Teacher areas); e2e/ = Playwright (LOCAL only)
 apps/worker      Cloudflare Worker: Hono API (src/routes), credits (src/credits), LLM path + prompts (src/llm),
                  textbooks + Q&A (src/content: store, chunk, ingest, workflow, import, scope, retrieve, answer),
-                 cron (src/cron.ts); scripts/ = make-admin, cleanup-test-data
-packages/core    domain types, Zod schemas, money (micro-INR / nano-USD), LLM task list
+                 board strategy (src/strategy), learning material (src/assets: notes, cards, questions, graph,
+                 checks, reviews, share = publish/import), cron (src/cron.ts);
+                 scripts/ = make-admin, cleanup-test-data, upload-board-material
+packages/core    domain types, Zod schemas, money (micro-INR / nano-USD), LLM task list, exam strategy +
+                 learning asset schemas, LaTeX → plain text (latex.ts)
 packages/db      Drizzle schema + migrations + seed (reference data only)
 packages/ui-tokens design tokens
-evals/           golden sets (golden/*.jsonl) + runner (run.mjs, LOCAL only); results/ is git-ignored
+evals/           golden sets (golden/*.jsonl, optional `type`: journal/table/figure/formula) + runner
+                 (run.mjs, LOCAL only, scores per type); results/ is git-ignored
 docs/            architecture.md (design), progress.md (status), setup-and-deployment.md + environments/
                  (how to run/deploy), engagement-policy.md (review checklist), feature_description.txt (spec)
 

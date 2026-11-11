@@ -144,6 +144,7 @@ for (const [i, item] of items.entries()) {
   }
   details.push({
     id: item.id,
+    type: item.type ?? (item.expectNotInBook ? 'not_in_book' : 'concept'),
     citation: cite,
     correctness: correct,
     pages: res.citations.map((c) => `${bookNo(c.bookTitle)}:${c.page}`),
@@ -159,6 +160,18 @@ for (const [i, item] of items.entries()) {
 
 const scored = details.filter((d) => d.error === undefined);
 const avg = (k) => (scored.length ? scored.reduce((s, d) => s + d[k], 0) / scored.length : 0);
+// Per question type (concept, journal, table, figure, formula, not_in_book): where retrieval is weak.
+const byType = {};
+for (const d of scored) {
+  const t = (byType[d.type] ??= { questions: 0, citation: 0, correctness: 0 });
+  t.questions++;
+  t.citation += d.citation;
+  t.correctness += d.correctness;
+}
+for (const t of Object.values(byType)) {
+  t.citation = Math.round((t.citation / t.questions) * 1000) / 1000;
+  t.correctness = Math.round((t.correctness / t.questions) * 1000) / 1000;
+}
 const summary = {
   model: model ?? 'unknown',
   promptVersion: 'tutor_answer@1',
@@ -166,11 +179,16 @@ const summary = {
   citationAccuracy: avg('citation'),
   correctness: avg('correctness'),
   notes: `${path.basename(GOLDEN)}; ${details.length - scored.length} errors; ${skipped} skipped (book not published)`,
+  byType,
   details,
 };
 console.log(
   `\nCitation accuracy ${(summary.citationAccuracy * 100).toFixed(1)}% (target ≥ 90%) · correctness ${(summary.correctness * 100).toFixed(1)}% (target ≥ 85%) · ${scored.length} questions`,
 );
+for (const [t, v] of Object.entries(byType))
+  console.log(
+    `  ${t.padEnd(12)} ${String(v.questions).padStart(3)} questions · citation ${(v.citation * 100).toFixed(0)}% · correctness ${(v.correctness * 100).toFixed(0)}%`,
+  );
 await call('POST', '/api/admin/evals/runs', summary);
 const outDir = path.join(import.meta.dirname, 'results');
 mkdirSync(outDir, { recursive: true });

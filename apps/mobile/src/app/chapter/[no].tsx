@@ -1,4 +1,10 @@
-import type { AssetSource, CardsDraft, GeneratedQuestion, StoredNote } from '@aicoach/core';
+import {
+  mathToText,
+  type AssetSource,
+  type CardsDraft,
+  type GeneratedQuestion,
+  type StoredNote,
+} from '@aicoach/core';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -212,7 +218,7 @@ function Cards({ cards }: { cards: Asset<CardsDraft> | null }) {
             <Text style={{ color: colors.text, fontWeight: '700' }}>{b.label}</Text>
             {b.points.map((p) => (
               <Text key={p} style={{ color: colors.text }}>
-                • {p}
+                • {mathToText(p)}
               </Text>
             ))}
           </View>
@@ -238,7 +244,7 @@ function Cards({ cards }: { cards: Asset<CardsDraft> | null }) {
             }}
           >
             <Text style={{ color: colors.text, fontSize: fontSize.lg, textAlign: 'center' }}>
-              {flipped ? card.back : card.front}
+              {mathToText(flipped ? card.back : card.front)}
             </Text>
             <Text
               style={{
@@ -314,7 +320,7 @@ function QuestionCard({
         <View>
           {q.options.map((o, k) => (
             <Text key={o} style={{ color: colors.text }}>
-              ({String.fromCharCode(97 + k)}) {o.replace(/^\(?[a-d][).]\s*/i, '')}
+              ({String.fromCharCode(97 + k)}) {mathToText(o).replace(/^\(?[a-d][).]\s*/i, '')}
             </Text>
           ))}
         </View>

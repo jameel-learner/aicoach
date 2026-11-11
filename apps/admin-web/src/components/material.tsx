@@ -9,8 +9,8 @@ import {
   type StoredNote,
 } from '@aicoach/core';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { Badge } from './ui';
+import { rehypePlugins, remarkPlugins } from '../lib/markdown';
 
 /**
  * How generated learning material is shown on the web (Admin → Learning material and the
@@ -61,7 +61,9 @@ const withPages = (md: string, sources: AssetSource[]) =>
 export function Md({ text, sources }: { text: string; sources: AssetSource[] }) {
   return (
     <div className="prose-answer text-sm leading-relaxed [&_table]:my-2 [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_th]:border [&_th]:border-border [&_th]:bg-surface-muted [&_th]:px-2">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{withPages(text, sources)}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+        {withPages(text, sources)}
+      </ReactMarkdown>
     </div>
   );
 }
