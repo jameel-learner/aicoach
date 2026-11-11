@@ -21,6 +21,8 @@ export interface Env {
   AI?: Ai;
   /** Durable textbook ingestion (src/content/workflow.ts). Absent where books are only imported. */
   INGEST_BOOK?: Workflow<import('./content/ingest').IngestParams>;
+  /** Exam strategy compile (LOCAL only, like ingestion; decision 9.5-2). */
+  COMPILE_STRATEGY?: Workflow<import('./strategy/compile').CompileParams>;
   // Secrets
   BETTER_AUTH_SECRET: string;
   RESEND_API_KEY?: string;

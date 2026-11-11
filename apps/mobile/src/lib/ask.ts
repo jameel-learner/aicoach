@@ -15,7 +15,7 @@ export interface Citation {
 }
 export type DoneEvent = {
   type: 'done';
-  answerId: string;
+  answerId: string | null;
   question: string;
   answer: string;
   citations: Citation[];

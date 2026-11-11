@@ -12,6 +12,7 @@ import { InstitutionsPage } from './pages/admin/InstitutionsPage';
 import { ModelsPage } from './pages/admin/ModelsPage';
 import { BookPage } from './pages/admin/BookPage';
 import { BooksPage } from './pages/admin/BooksPage';
+import { StrategyPage } from './pages/admin/StrategyPage';
 import { TaxonomyPage } from './pages/admin/TaxonomyPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { AuthPage } from './pages/AuthPage';
@@ -80,6 +81,11 @@ const adminCreditsRoute = createRoute({
 });
 const adminModelsRoute = createRoute({ ...parent, path: '/admin/models', component: ModelsPage });
 const adminBooksRoute = createRoute({ ...parent, path: '/admin/books', component: BooksPage });
+const adminStrategyRoute = createRoute({
+  ...parent,
+  path: '/admin/strategy',
+  component: StrategyPage,
+});
 const adminBookRoute = createRoute({
   ...parent,
   path: '/admin/books/$bookId',
@@ -112,6 +118,7 @@ const routeTree = rootRoute.addChildren([
     adminModelsRoute,
     adminBooksRoute,
     adminBookRoute,
+    adminStrategyRoute,
     creditsRoute,
     walletRoute,
     playgroundRoute,

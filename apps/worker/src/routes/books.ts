@@ -1,4 +1,11 @@
-import { bookMetaSchema, mapBookInstitutionsSchema, updateBookPageSchema } from '@aicoach/core';
+import {
+  bookMetaSchema,
+  mapBookInstitutionsSchema,
+  parsePageList,
+  removedReasonsSchema,
+  setRemovedReasonsSchema,
+  updateBookPageSchema,
+} from '@aicoach/core';
 import {
   bookPages,
   books,
@@ -36,6 +43,18 @@ export const bookRoutes = new Hono<AppBindings>();
 bookRoutes.use('*', requireAuth, requireRole('admin'));
 
 const MAX_PDF_BYTES = 60 * 1024 * 1024;
+
+/** Every page a reason names must be one that was removed (original page numbers). */
+function checkReasons(reasons: { pages: string }[], removed: number[]) {
+  const max = Math.max(0, ...removed) + 1;
+  for (const r of reasons) {
+    const list = parsePageList(r.pages, max);
+    if (typeof list === 'string') throw badRequest(`Reason pages "${r.pages}": ${list}`);
+    const extra = list.filter((p) => !removed.includes(p));
+    if (extra.length)
+      throw badRequest(`Reason pages "${r.pages}" include page ${extra[0]}, which was not removed`);
+  }
+}
 
 async function getBook(db: Db, id: string) {
   const b = await db.select().from(books).where(eq(books.id, id)).get();
@@ -123,8 +142,25 @@ bookRoutes.post('/', async (c) => {
     offeringId: form.offeringId,
     edition: form.edition || undefined,
     language: form.language || undefined,
+    kind: form.kind || undefined,
+    category: form.category || undefined,
+    academicYear: form.academicYear || undefined,
+    relatedBookId: form.relatedBookId || undefined,
   });
   if (!meta.success) throw badRequest(meta.error.issues[0]?.message ?? 'Invalid details');
+  const board = meta.data.kind === 'board_material';
+  if (board && (!meta.data.category || !meta.data.academicYear))
+    throw badRequest('Board material needs a category and an academic year');
+  if (!board && (meta.data.category || meta.data.relatedBookId))
+    throw badRequest('Category and linked paper are for board material only');
+  if (meta.data.relatedBookId) {
+    const paper = await db
+      .select({ kind: books.kind })
+      .from(books)
+      .where(eq(books.id, meta.data.relatedBookId))
+      .get();
+    if (paper?.kind !== 'board_material') throw notFound('Linked paper');
+  }
   const offering = await db
     .select({ id: subjectOfferings.id })
     .from(subjectOfferings)
@@ -132,13 +168,38 @@ bookRoutes.post('/', async (c) => {
     .get();
   if (!offering) throw notFound('Subject offering');
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let pageCount: number;
+  let bytes: Uint8Array = new Uint8Array(await file.arrayBuffer());
+  let pdf: PDFDocument;
   try {
-    pageCount = (await PDFDocument.load(bytes, { ignoreEncryption: true })).getPageCount();
+    pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   } catch {
     throw badRequest('That file is not a readable PDF');
   }
+  // Pages removed BEFORE storing (e.g. answer-script cover pages with a register number): they
+  // never reach the shared, add-only content store (decision 9.5-2).
+  let removedPages: number[] | null = null;
+  const removeText = typeof form.removePages === 'string' ? form.removePages.trim() : '';
+  if (removeText) {
+    const list = parsePageList(removeText, pdf.getPageCount());
+    if (typeof list === 'string') throw badRequest(list);
+    for (const p of [...list].reverse()) pdf.removePage(p - 1);
+    bytes = await pdf.save();
+    removedPages = list;
+  }
+  let removedReasons: { pages: string; why: string }[] | null = null;
+  if (typeof form.removeReasons === 'string' && form.removeReasons.trim()) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(form.removeReasons);
+    } catch {
+      throw badRequest('removeReasons must be JSON');
+    }
+    const parsed = removedReasonsSchema.safeParse(raw);
+    if (!parsed.success) throw badRequest(parsed.error.issues[0]?.message ?? 'Invalid reasons');
+    checkReasons(parsed.data, removedPages ?? []);
+    removedReasons = parsed.data;
+  }
+  const pageCount = pdf.getPageCount();
   const id = crypto.randomUUID();
   await contentBucket(c.env).put(keys.original(id), bytes, {
     httpMetadata: { contentType: 'application/pdf' },
@@ -157,11 +218,43 @@ bookRoutes.post('/', async (c) => {
     );
   }
   await db.batch([
-    db.insert(books).values({ id, ...meta.data, pageCount, createdBy: me.id }),
+    db
+      .insert(books)
+      .values({ id, ...meta.data, pageCount, removedPages, removedReasons, createdBy: me.id }),
     ...pageInserts,
   ]);
-  await audit(db, me.id, 'upload_book', 'book', id, { ...meta.data, pageCount });
+  await audit(db, me.id, 'upload_book', 'book', id, { ...meta.data, pageCount, removedPages });
   return c.json({ id, pageCount }, 201);
+});
+
+/**
+ * Why pages were left out (for documents uploaded before reasons were recorded). Only describes
+ * pages that were actually removed; changes nothing in the stored PDF.
+ */
+bookRoutes.put('/:id/removed-reasons', async (c) => {
+  const { db } = c.var;
+  const book = await getBook(db, c.req.param('id'));
+  const { reasons } = await parseBody(c, setRemovedReasonsSchema);
+  checkReasons(reasons, book.removedPages ?? []);
+  await db
+    .update(books)
+    .set({ removedReasons: reasons, updatedAt: new Date() })
+    .where(eq(books.id, book.id));
+  // Already published here: add the reasons to its catalog entry, so other environments import
+  // them (the catalog entry is the "latest" pointer that every publish rewrites; nothing is deleted).
+  if (book.publishedVersion && book.source === 'ingested') {
+    const bucket = contentBucket(c.env);
+    const cat = await bucket.get(keys.catalog(book.id));
+    if (cat) {
+      const manifest = (await cat.json()) as Record<string, unknown>;
+      await bucket.put(
+        keys.catalog(book.id),
+        JSON.stringify({ ...manifest, removedReasons: reasons }),
+      );
+    }
+  }
+  await audit(db, c.var.user.id, 'set_removed_reasons', 'book', book.id, { reasons });
+  return c.json({ ok: true });
 });
 
 bookRoutes.get('/shared', async (c) => c.json(await listSharedBooks(c.env, c.var.db)));

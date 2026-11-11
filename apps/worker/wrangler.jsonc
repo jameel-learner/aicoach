@@ -37,6 +37,12 @@
   // Textbook ingestion runs as a durable Workflow (LOCAL: where books are processed).
   "workflows": [
     { "name": "aicoach-ingest-book", "binding": "INGEST_BOOK", "class_name": "IngestBookWorkflow" },
+    // Exam strategy from board material (LOCAL only; staging imports the result).
+    {
+      "name": "aicoach-compile-strategy",
+      "binding": "COMPILE_STRATEGY",
+      "class_name": "CompileStrategyWorkflow",
+    },
   ],
   "vars": {
     "APP_ENV": "development",

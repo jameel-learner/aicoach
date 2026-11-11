@@ -1,8 +1,9 @@
 import { answers, type Db } from '@aicoach/db';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Env, SessionUser } from '../env';
 import { InsufficientCredits } from '../credits/ledger';
 import { NOT_IN_TEXTBOOK, QUERY_REWRITE, TUTOR_ANSWER } from '../llm/prompts';
+import { getTaskConfig } from '../llm/registry';
 import { runMeteredChat } from '../llm/run';
 import { retrieve, type Source } from './retrieve';
 import type { AskScope } from './scope';
@@ -38,7 +39,8 @@ export type AskEvent =
   | { type: 'delta'; text: string }
   | {
       type: 'done';
-      answerId: string;
+      /** null when not saved (Admin model-override runs). */
+      answerId: string | null;
       /** The standalone question actually answered (see meta). */
       question: string;
       answer: string;
@@ -84,13 +86,20 @@ type AnswerRow = typeof answers.$inferSelect;
 async function findCached(
   db: Db,
   scopeKey: string,
+  generator: string,
   norm: string,
   getVector: () => Promise<number[]>,
 ) {
+  // Only answers of the current generator (configured model + prompt version) that weren't retired.
+  const usable = and(
+    eq(answers.scopeKey, scopeKey),
+    eq(answers.generator, generator),
+    isNull(answers.retiredAt),
+  );
   const exact = await db
     .select()
     .from(answers)
-    .where(and(eq(answers.scopeKey, scopeKey), eq(answers.questionNorm, norm)))
+    .where(and(usable, eq(answers.questionNorm, norm)))
     .orderBy(desc(answers.variantNo))
     .get();
   if (exact) return exact;
@@ -98,7 +107,7 @@ async function findCached(
   const recent = await db
     .select()
     .from(answers)
-    .where(eq(answers.scopeKey, scopeKey))
+    .where(usable)
     .orderBy(desc(answers.createdAt))
     .limit(300);
   let best: AnswerRow | null = null;
@@ -223,6 +232,10 @@ export async function answerQuestion(
   }
   const norm = normaliseQuestion(question);
   const scopeKey = scopeKeyOf(scope);
+  // Saved answers are reused only from the same generator (decision 9.5-3). An Admin model override
+  // (eval runs) is answered fresh and never saved, so it can't reach students.
+  const override = me.role === 'admin' && !!input.model;
+  const generator = `${(await getTaskConfig(db, 'tutor_chat')).primaryModel}|${TUTOR_ANSWER.version}`;
   const books = scope.books.map((b) => ({ id: b.id, title: b.title }));
   // Embedded at most once, and only when needed (not for an exact cache hit).
   let embedded: Promise<number[]> | undefined;
@@ -231,8 +244,8 @@ export async function answerQuestion(
       .embed([question])
       .then((v) => v[0]!));
 
-  if (!input.forceNew) {
-    const hit = await findCached(db, scopeKey, norm, getVector);
+  if (!input.forceNew && !override) {
+    const hit = await findCached(db, scopeKey, generator, norm, getVector);
     if (hit) {
       await db
         .update(answers)
@@ -318,33 +331,46 @@ export async function answerQuestion(
   const uncertain =
     !notInBook && (!citations.length || invalid || citations.some((c) => !c.supported));
 
-  const prev = await db
-    .select({ v: sql<number>`coalesce(max(${answers.variantNo}), 0)` })
-    .from(answers)
-    .where(and(eq(answers.scopeKey, scopeKey), eq(answers.questionNorm, norm)))
-    .get();
-  const variantNo = Number(prev?.v ?? 0) + 1;
-  const row = await db
-    .insert(answers)
-    .values({
-      scopeKey,
-      question,
-      questionNorm: norm,
-      embedding: vector,
-      answer: text,
-      citations,
-      notInBook,
-      variantNo,
-      model,
-      promptVersion: TUTOR_ANSWER.version,
-      createdBy: me.id,
-    })
-    .returning({ id: answers.id })
-    .get();
+  // Model-override answers (Admin eval runs) are not saved: they must never be served to students.
+  let answerId: string | null = null;
+  let variantNo = 1;
+  if (!override) {
+    const prev = await db
+      .select({ v: sql<number>`coalesce(max(${answers.variantNo}), 0)` })
+      .from(answers)
+      .where(
+        and(
+          eq(answers.scopeKey, scopeKey),
+          eq(answers.generator, generator),
+          eq(answers.questionNorm, norm),
+        ),
+      )
+      .get();
+    variantNo = Number(prev?.v ?? 0) + 1;
+    const row = await db
+      .insert(answers)
+      .values({
+        scopeKey,
+        question,
+        questionNorm: norm,
+        embedding: vector,
+        answer: text,
+        citations,
+        notInBook,
+        variantNo,
+        model,
+        promptVersion: TUTOR_ANSWER.version,
+        generator,
+        createdBy: me.id,
+      })
+      .returning({ id: answers.id })
+      .get();
+    answerId = row.id;
+  }
 
   emit({
     type: 'done',
-    answerId: row.id,
+    answerId,
     question,
     answer: text,
     citations,

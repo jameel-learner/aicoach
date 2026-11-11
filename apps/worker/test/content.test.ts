@@ -313,6 +313,159 @@ describe('a run that stopped (e.g. the dev server reloaded mid-reading)', () => 
   });
 });
 
+describe('board material (decision 9.5-2)', () => {
+  async function uploadBoard(
+    jar: Jar,
+    offeringId: string,
+    pages: number,
+    fields: Record<string, string>,
+  ) {
+    const form = new FormData();
+    form.set('file', new File([await makePdf(pages)], 'script.pdf', { type: 'application/pdf' }));
+    form.set('title', 'Centum answer script 1 (2026)');
+    form.set('offeringId', offeringId);
+    for (const [k, v] of Object.entries(fields)) form.set(k, v);
+    return call('POST', '/api/admin/books', { jar, multipart: form });
+  }
+
+  it('removes cover pages before storing, reads handwriting with the vision task, stays out of Ask', async () => {
+    const offeringId = await seedPilotTaxonomy();
+    const admin = await createSignedInUser('admin');
+    await call('POST', '/api/admin/models/sync', { jar: admin.jar });
+    await call('POST', '/api/admin/credits/issue', {
+      jar: admin.jar,
+      body: { target: { type: 'platform' }, credits: '5' },
+    });
+    // Board material needs a category and a year; page lists are validated
+    expect((await uploadBoard(admin.jar, offeringId, 3, { kind: 'board_material' })).status).toBe(
+      400,
+    );
+    const bad = await uploadBoard(admin.jar, offeringId, 3, {
+      kind: 'board_material',
+      category: 'answer_script',
+      academicYear: '2025-26',
+      removePages: '1-3',
+    });
+    expect(bad.status).toBe(400);
+
+    // A reason may only describe pages that are removed (original page numbers)
+    const wrongReason = await uploadBoard(admin.jar, offeringId, 3, {
+      kind: 'board_material',
+      category: 'answer_script',
+      academicYear: '2025-26',
+      removePages: '1',
+      removeReasons: JSON.stringify([{ pages: '2', why: 'Not actually removed' }]),
+    });
+    expect(wrongReason.status).toBe(400);
+    const up = await uploadBoard(admin.jar, offeringId, 3, {
+      kind: 'board_material',
+      category: 'answer_script',
+      academicYear: '2025-26',
+      removePages: '1',
+      removeReasons: JSON.stringify([{ pages: '1', why: 'Cover page with the register number' }]),
+    });
+    expect(up.status).toBe(201);
+    const { id, pageCount } = await json(up);
+    expect(pageCount).toBe(2);
+    // The stored PDF no longer has the cover page
+    const stored = await env.CONTENT.get(`books/${id}/original.pdf`);
+    expect((await PDFDocument.load(await stored!.arrayBuffer())).getPageCount()).toBe(2);
+    let view = await json(await call('GET', `/api/admin/books/${id}`, { jar: admin.jar }));
+    expect(view.book).toMatchObject({
+      kind: 'board_material',
+      category: 'answer_script',
+      academicYear: '2025-26',
+      removedPages: [1],
+      removedReasons: [{ pages: '1', why: 'Cover page with the register number' }],
+    });
+
+    // Handwritten pages: vision transcription (task vision_ocr), not the OCR file-parser
+    or.answer =
+      '### Q30\n\n| Particulars | Dr | Cr |\n| --- | --- | --- |\n| Bank A/c | 90,000 | |';
+    await call('POST', `/api/admin/books/${id}/parse`, { jar: admin.jar, body: {} });
+    view = await json(await call('GET', `/api/admin/books/${id}`, { jar: admin.jar }));
+    expect(view.book.status).toBe('review');
+    expect(or.parsedFiles).toEqual([]);
+    const tasks = await env.DB.prepare('SELECT DISTINCT task FROM llm_usage WHERE task != ?')
+      .bind('playground')
+      .all<{ task: string }>();
+    expect(tasks.results.map((r) => r.task)).toEqual(['vision_ocr']);
+    const p1 = await json(await call('GET', `/api/admin/books/${id}/pages/1`, { jar: admin.jar }));
+    expect(p1.markdown).toContain('### Q30');
+
+    // Published to the shared store with its labels; never searched by Ask
+    await call('POST', `/api/admin/books/${id}/publish`, { jar: admin.jar, body: {} });
+    const manifest = await (await env.CONTENT.get(`catalog/${id}.json`))!.json<any>();
+    expect(manifest).toMatchObject({ kind: 'board_material', category: 'answer_script' });
+    // Reasons changed after publishing (e.g. recorded later): the catalog entry carries them too
+    const why = [{ pages: '1', why: 'Cover page: register number and signatures' }];
+    expect(
+      (
+        await call('PUT', `/api/admin/books/${id}/removed-reasons`, {
+          jar: admin.jar,
+          body: { reasons: [{ pages: '1-2', why: 'Too many pages' }] },
+        })
+      ).status,
+    ).toBe(400);
+    await call('PUT', `/api/admin/books/${id}/removed-reasons`, {
+      jar: admin.jar,
+      body: { reasons: why },
+    });
+    expect(await (await env.CONTENT.get(`catalog/${id}.json`))!.json<any>()).toMatchObject({
+      removedReasons: why,
+    });
+    const scope = await json(await call('GET', '/api/ask/scope', { jar: admin.jar }));
+    expect(scope.books.map((b: any) => b.id)).not.toContain(id);
+
+    // Another environment imports it as board material
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM chunks_fts'),
+      env.DB.prepare('DELETE FROM chunks'),
+      env.DB.prepare('DELETE FROM book_pages'),
+      env.DB.prepare('DELETE FROM books'),
+    ]);
+    await call('POST', `/api/admin/books/shared/${id}/import`, { jar: admin.jar, body: {} });
+    view = await json(await call('GET', `/api/admin/books/${id}`, { jar: admin.jar }));
+    expect(view.book).toMatchObject({
+      kind: 'board_material',
+      category: 'answer_script',
+      source: 'imported',
+      removedPages: [1],
+      removedReasons: [{ pages: '1', why: 'Cover page: register number and signatures' }],
+    });
+  });
+
+  it('links a scheme of evaluation to its paper; textbooks cannot have a category', async () => {
+    const offeringId = await seedPilotTaxonomy();
+    const admin = await createSignedInUser('admin');
+    const paper = await json(
+      await uploadBoard(admin.jar, offeringId, 2, {
+        kind: 'board_material',
+        category: 'board_paper',
+        academicYear: '2025-26',
+      }),
+    );
+    const scheme = await uploadBoard(admin.jar, offeringId, 1, {
+      kind: 'board_material',
+      category: 'scheme',
+      academicYear: '2025-26',
+      relatedBookId: paper.id,
+    });
+    expect(scheme.status).toBe(201);
+    expect(
+      (
+        await uploadBoard(admin.jar, offeringId, 1, {
+          kind: 'board_material',
+          category: 'scheme',
+          academicYear: '2025-26',
+          relatedBookId: 'nope',
+        })
+      ).status,
+    ).toBe(404);
+    expect((await uploadBoard(admin.jar, offeringId, 1, { category: 'scheme' })).status).toBe(400);
+  });
+});
+
 describe('large uploads', () => {
   it('uploads a book-sized PDF (page rows stay under the D1 parameter limit)', async () => {
     const offeringId = await seedPilotTaxonomy();

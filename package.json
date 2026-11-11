@@ -18,6 +18,7 @@
     "db:migrate:local": "pnpm --filter @aicoach/worker db:migrate:local",
     "db:seed:local": "pnpm --filter @aicoach/worker db:seed:local",
     "cleanup-test:local": "pnpm --filter @aicoach/worker db:cleanup-test:local",
+    "upload-board:local": "node apps/worker/scripts/upload-board-material.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "deploy:staging": "pnpm --filter @aicoach/admin-web build && pnpm --filter @aicoach/worker deploy:staging",

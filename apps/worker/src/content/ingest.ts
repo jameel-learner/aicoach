@@ -102,7 +102,18 @@ export async function parsePage(
   const obj = await contentBucket(env).get(keys.page(bookId, pageNo));
   if (!obj) throw new Error(`Page ${pageNo} PDF is missing; run the split step first`);
   const pdf = new Uint8Array(await obj.arrayBuffer());
+  const book = await db
+    .select({ category: books.category })
+    .from(books)
+    .where(eq(books.id, bookId))
+    .get();
   try {
+    if (book?.category === 'answer_script') {
+      // Handwritten, often photographed sideways: OCR engines do poorly, a vision model reads it.
+      const t = await transcribeHandwriting(env, db, pdf, pageNo, userId);
+      await savePage(db, bookId, pageNo, userId, t.text, t.rawUsdNano);
+      return;
+    }
     const res = await runMeteredChat(env, db, {
       task: 'pdf_parse',
       payers: [await platformWallet(db)],
@@ -134,18 +145,7 @@ export async function parsePage(
       markdown = withFigureDescriptions(markdown, fig.text);
       cost += fig.rawUsdNano;
     }
-    await db
-      .update(bookPages)
-      .set({
-        markdown,
-        status: markdown ? 'parsed' : 'failed',
-        flags: pageFlags(markdown),
-        error: markdown ? null : 'The parser returned no text',
-        costUsdNano: sql`${bookPages.costUsdNano} + ${cost}`,
-        updatedBy: userId,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(bookPages.bookId, bookId), eq(bookPages.pageNo, pageNo)));
+    await savePage(db, bookId, pageNo, userId, markdown, cost);
   } catch (err) {
     if (err instanceof InsufficientCredits) throw err;
     await db
@@ -158,6 +158,77 @@ export async function parsePage(
       .where(and(eq(bookPages.bookId, bookId), eq(bookPages.pageNo, pageNo)));
   }
 }
+
+/** OCR/vision text can carry absurd table dividers (thousands of dashes): keep them short. */
+export const tidy = (md: string) =>
+  md
+    .replace(/-{6,}/g, '---')
+    .replace(/:-{3,}/g, ':---')
+    .replace(/[ \t]{4,}/g, '  ');
+
+async function savePage(
+  db: Db,
+  bookId: string,
+  pageNo: number,
+  userId: string,
+  markdown: string,
+  costUsdNano: number,
+) {
+  await db
+    .update(bookPages)
+    .set({
+      markdown: tidy(markdown),
+      status: markdown ? 'parsed' : 'failed',
+      flags: pageFlags(tidy(markdown)),
+      error: markdown ? null : 'The parser returned no text',
+      costUsdNano: sql`${bookPages.costUsdNano} + ${costUsdNano}`,
+      updatedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(bookPages.bookId, bookId), eq(bookPages.pageNo, pageNo)));
+}
+
+/** Board answer scripts (decision 9.5-2): vision transcription, task vision_ocr. */
+async function transcribeHandwriting(
+  env: Env,
+  db: Db,
+  pdf: Uint8Array,
+  pageNo: number,
+  userId: string,
+) {
+  const res = await runMeteredChat(env, db, {
+    task: 'vision_ocr',
+    payers: [await platformWallet(db)],
+    userId,
+    maxTokens: 2500,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: ANSWER_SCRIPT_PROMPT },
+          {
+            type: 'file',
+            file: {
+              filename: `page-${pageNo}.pdf`,
+              file_data: `data:application/pdf;base64,${toBase64(pdf)}`,
+            },
+          },
+        ],
+      },
+    ],
+  });
+  return { text: res.content.trim(), rawUsdNano: res.rawUsdNano };
+}
+
+export const ANSWER_SCRIPT_PROMPT = [
+  "This is one scanned page (it may be rotated, and may show two facing pages) of a student's handwritten board-exam answer booklet in Accountancy that scored full marks.",
+  "Transcribe it faithfully as Markdown, in reading order, keeping the student's own wording, numbers and layout:",
+  '- Start each answer with its question number as a heading, e.g. "### Q30".',
+  '- Journal entries, ledger/T-accounts, statements and working notes as Markdown tables, keeping Dr/Cr, L.F., ₹ columns, dates and narrations exactly as written.',
+  '- Mark examiner marks or ticks (in red/green ink) as [examiner: …]; do not include signatures.',
+  '- Do NOT transcribe names, register numbers, signatures or other personal details; write [personal detail removed] instead.',
+  'Output only the Markdown. If the page is blank, output nothing.',
+].join('\n');
 
 /** OCR image placeholders, e.g. ![img-0.jpeg](img-0.jpeg). */
 const IMAGE_REF = /!\[[^\]]*\]\([^)]*\)/;
@@ -264,6 +335,13 @@ export interface Manifest {
   embeddingModel: string;
   publishedAt: string;
   sourceEnv: string;
+  /** Absent in packages published before Phase 3 (= textbook). */
+  kind?: 'textbook' | 'board_material';
+  category?: (typeof books.$inferSelect)['category'];
+  academicYear?: string | null;
+  relatedBookId?: string | null;
+  removedPages?: number[] | null;
+  removedReasons?: { pages: string; why: string }[] | null;
 }
 
 const jsonl = (rows: unknown[]) => rows.map((r) => JSON.stringify(r)).join('\n');
@@ -377,6 +455,12 @@ async function runPublish(env: Env, db: Db, p: IngestParams, step: StepRunner) {
       embeddingModel: emb.model,
       publishedAt: new Date().toISOString(),
       sourceEnv: env.APP_ENV,
+      kind: book.kind,
+      category: book.category,
+      academicYear: book.academicYear,
+      relatedBookId: book.relatedBookId,
+      removedPages: book.removedPages,
+      removedReasons: book.removedReasons,
     };
     await bucket.put(keys.pkg(p.bookId, version, 'manifest.json'), JSON.stringify(manifest));
     await bucket.put(keys.catalog(p.bookId), JSON.stringify(manifest));

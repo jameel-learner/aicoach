@@ -38,6 +38,7 @@ export interface MeteredChatInput {
   maxTokens?: number;
   responseFormat?: ChatRequest['responseFormat'];
   plugins?: ChatRequest['plugins'];
+  reasoning?: ChatRequest['reasoning'];
   /** Non-token charges to add to the hold estimate (e.g. OCR at ~$0.002/page), nano-USD. */
   extraEstimateUsdNano?: number;
   /** Stream the answer text as it arrives (settled at the real cost when the stream ends). */
@@ -101,6 +102,7 @@ export async function runMeteredChat(
       temperature: cfg.temperature,
       responseFormat: input.responseFormat,
       plugins: input.plugins,
+      reasoning: input.reasoning,
       onDelta: input.onDelta,
     });
     const settled = await settleHold(db, hold, {

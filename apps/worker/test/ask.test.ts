@@ -278,6 +278,73 @@ describe('ask your textbook', () => {
     expect(fallback).toMatchObject({ type: 'done', question: 'tell me about partnership' });
   });
 
+  it('reuses saved answers only from the current tutor model + prompt; evals never reach students', async () => {
+    const t = await setup();
+    or.answer = 'Goodwill is the value of the reputation of a firm [S1].';
+    const ask1 = () =>
+      ask(t.student.jar, { question: 'What is goodwill?', stream: false }).then((r) => json(r));
+    const saved = async () =>
+      (await env.DB.prepare('SELECT count(*) n FROM answers').first<{ n: number }>())!.n;
+
+    expect(await ask1()).toMatchObject({ cached: false });
+    expect(await ask1()).toMatchObject({ cached: true, billedMicro: 0 });
+
+    // Admin switches the tutor model: the next ask is answered fresh by the new model (charged)
+    const setTutor = (primaryModel: string) =>
+      call('PUT', '/api/admin/models/registry/tutor_chat', {
+        jar: t.admin.jar,
+        body: { primaryModel },
+      });
+    expect((await setTutor('anthropic/claude-sonnet-5.5')).status).toBe(200);
+    let n = or.requests.length;
+    const fresh = await ask1();
+    expect(fresh).toMatchObject({ cached: false });
+    expect(fresh.billedMicro).toBeGreaterThan(0);
+    expect(or.requests.at(-1)!.model).toBe('anthropic/claude-sonnet-5.5');
+    expect(or.requests.length).toBe(n + 1);
+    // …and switching back reuses the earlier model's saved answer, free
+    await setTutor('google/gemini-2.5-flash');
+    n = or.requests.length;
+    expect(await ask1()).toMatchObject({ cached: true, billedMicro: 0 });
+    expect(or.requests.length).toBe(n);
+
+    // An Admin model override (eval run) is answered fresh and never saved
+    const before = await saved();
+    const evalRun = await json(
+      await call('POST', '/api/ask', {
+        jar: t.admin.jar,
+        body: { question: 'What is goodwill?', stream: false, model: 'openai/gpt-4o-mini' },
+      }),
+    );
+    expect(evalRun).toMatchObject({ cached: false, answerId: null, model: 'openai/gpt-4o-mini' });
+    expect(await saved()).toBe(before);
+
+    // Admin sees saved answers per generator and stops reusing the current one
+    const list = await json(await call('GET', '/api/admin/saved-answers', { jar: t.admin.jar }));
+    expect(list.current).toBe('google/gemini-2.5-flash|tutor_answer@1');
+    expect(list.generators.map((g: any) => [g.model, g.reusable, g.current]).sort()).toEqual([
+      ['anthropic/claude-sonnet-5.5', 1, false],
+      ['google/gemini-2.5-flash', 1, true],
+    ]);
+    expect(
+      (
+        await call('POST', '/api/admin/saved-answers/retire', {
+          jar: t.student.jar,
+          body: { generator: list.current },
+        })
+      ).status,
+    ).toBe(403);
+    const retired = await json(
+      await call('POST', '/api/admin/saved-answers/retire', {
+        jar: t.admin.jar,
+        body: { generator: list.current },
+      }),
+    );
+    expect(retired).toEqual({ retired: 1 });
+    expect(await ask1()).toMatchObject({ cached: false }); // answered fresh again
+    expect(await saved()).toBe(before + 1); // nothing deleted; the new answer is added
+  });
+
   it('says "not in your textbook" without leaking the marker, and flags uncertain answers', async () => {
     const t = await setup();
     or.answer =

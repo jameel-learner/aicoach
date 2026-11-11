@@ -23,6 +23,7 @@ export function navFor(me: MeResponse): { section: string; items: NavItem[] }[] 
         { to: '/admin/credits', label: 'Credits & payments' },
         { to: '/admin/models', label: 'AI models' },
         { to: '/admin/books', label: 'Textbooks' },
+        { to: '/admin/strategy', label: 'Exam strategy' },
         { to: '/credits', label: 'Wallets' },
         { to: '/playground', label: 'AI playground' },
       ],

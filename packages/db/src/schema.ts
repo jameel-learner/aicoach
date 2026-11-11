@@ -609,6 +609,24 @@ export const books = sqliteTable('books', {
     .notNull()
     .default('ingested'),
   workflowId: text('workflow_id'),
+  /** textbook (searched by Ask) or board_material (blueprints, papers, schemes…; decision 9.5-2). */
+  kind: text('kind', { enum: ['textbook', 'board_material'] })
+    .notNull()
+    .default('textbook'),
+  /** Board material only. */
+  category: text('category', {
+    enum: ['blueprint', 'model_paper', 'board_paper', 'scheme', 'question_bank', 'answer_script'],
+  }),
+  /** Academic year of board material, e.g. "2026-27". */
+  academicYear: text('academic_year'),
+  /** A scheme of evaluation → the paper it answers. */
+  relatedBookId: text('related_book_id'),
+  /** Original page numbers removed before storing (e.g. answer-script cover pages). */
+  removedPages: text('removed_pages', { mode: 'json' }).$type<number[]>(),
+  /** Why pages were removed, per range of ORIGINAL page numbers, e.g. [{ pages: "2-8", why: "Kannada version" }]. */
+  removedReasons: text('removed_reasons', { mode: 'json' }).$type<
+    { pages: string; why: string }[]
+  >(),
   createdBy: text('created_by').notNull(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -691,13 +709,21 @@ export const answers = sqliteTable(
     variantNo: integer('variant_no').notNull().default(1),
     model: text('model'),
     promptVersion: text('prompt_version').notNull(),
+    /**
+     * What produced it: the CONFIGURED tutor model + prompt version, e.g.
+     * "google/gemini-2.5-flash|tutor_answer@1". Only answers of the current generator are reused,
+     * so a model switch or prompt change takes effect at once (switching back reuses them again).
+     */
+    generator: text('generator').notNull().default(''),
+    /** Set by "Stop reusing" (Admin): kept as history, never served again. */
+    retiredAt: integer('retired_at', { mode: 'timestamp_ms' }),
     createdBy: text('created_by'),
     hits: integer('hits').notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [
     index('answers_scope_idx').on(t.scopeKey, t.createdAt),
-    index('answers_norm_idx').on(t.scopeKey, t.questionNorm),
+    index('answers_norm_idx').on(t.scopeKey, t.generator, t.questionNorm),
   ],
 );
 
@@ -714,3 +740,84 @@ export const evalRuns = sqliteTable('eval_runs', {
   createdBy: text('created_by'),
   createdAt: createdAt(),
 });
+
+// ---------------------------------------------------------------- Phase 3: exam strategy
+
+/**
+ * One compile run = one strategy version per subject offering (architecture §3.5, decision 9.5-2).
+ * compiling → draft (Admin reviews) → approved (the one journeys read) → superseded; or failed.
+ */
+export const examStrategies = sqliteTable(
+  'exam_strategies',
+  {
+    id: id(),
+    offeringId: text('offering_id')
+      .notNull()
+      .references(() => subjectOfferings.id),
+    version: integer('version').notNull(),
+    status: text('status', {
+      enum: ['compiling', 'draft', 'approved', 'superseded', 'failed'],
+    })
+      .notNull()
+      .default('compiling'),
+    statusMessage: text('status_message'),
+    /** Step progress for the UI, e.g. { step: 'papers', done: 5, total: 13 }. */
+    progress: text('progress', { mode: 'json' }).$type<Record<string, unknown>>(),
+    /** The compiled ExamStrategy (packages/core/src/strategy.ts); null while compiling. */
+    strategy: text('strategy', { mode: 'json' }).$type<unknown>(),
+    /** Board documents used (ids), fixed when the run starts. */
+    sourceBookIds: text('source_book_ids', { mode: 'json' }).$type<string[]>().notNull(),
+    costUsdNano: integer('cost_usd_nano').notNull().default(0),
+    promptVersion: text('prompt_version').notNull(),
+    workflowId: text('workflow_id'),
+    reviewNote: text('review_note'),
+    createdBy: text('created_by').notNull(),
+    approvedBy: text('approved_by'),
+    approvedAt: integer('approved_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('exam_strategies_version_uq').on(t.offeringId, t.version)],
+);
+
+/** Questions found in board material by a compile run (tagged; schemes merged in). */
+export const boardItems = sqliteTable(
+  'board_items',
+  {
+    id: id(),
+    strategyId: text('strategy_id')
+      .notNull()
+      .references(() => examStrategies.id),
+    bookId: text('book_id')
+      .notNull()
+      .references(() => books.id),
+    /** Page of the stored document. */
+    page: integer('page'),
+    source: text('source', {
+      enum: ['board_exam', 'model_paper', 'practice_paper', 'bank'],
+    }).notNull(),
+    paperLabel: text('paper_label'),
+    examYear: integer('exam_year'),
+    qno: text('qno').notNull(),
+    part: text('part', { enum: ['A', 'B', 'C', 'D'] }),
+    marks: integer('marks'),
+    chapter: integer('chapter'),
+    topic: text('topic').notNull(),
+    /** Canonical topic after merging similar wording (step "topics"). */
+    topicGroup: text('topic_group'),
+    typology: text('typology').notNull(),
+    cognitive: text('cognitive'),
+    difficulty: text('difficulty'),
+    text: text('text').notNull(),
+    answer: text('answer'),
+    markSplit: text('mark_split'),
+    markingPoints: text('marking_points', { mode: 'json' }).$type<
+      { point: string; marks: number }[]
+    >(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('board_items_strategy_idx').on(t.strategyId, t.chapter),
+    index('board_items_book_idx').on(t.strategyId, t.bookId),
+  ],
+);

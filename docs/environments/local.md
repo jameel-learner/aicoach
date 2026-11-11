@@ -142,7 +142,7 @@ Do this after the 10 steps above (same accounts). **AI calls are real and cost r
 12. **POC → Credits → institution:** *Your downline* shows the class's usage. The POC can open the class wallet but not the student's (immediate downline only).
 13. **Admin → AI models:** switch *Admin/Teacher playground* to `openai/gpt-4o-mini`. Within ~30 seconds the playground answers from that model (shown in the answer). Switch it back.
 
-## 3c. Textbooks walkthrough (Phase 2, in progress)
+## 3c. Textbooks walkthrough (Phase 2)
 
 Processes the NCERT books **once** into the shared content store (staging later imports them for free). Real cost: about **US$0.0022 per page**, ≈ US$1.10 for both books, paid from the platform wallet.
 
@@ -157,6 +157,40 @@ Processes the NCERT books **once** into the shared content store (staging later 
 9. **Ask (web):** on any page, click **Ask your textbook** (bottom right). Ask e.g. *What is goodwill?* The answer streams in, with page badges (click one to see the source text). Ask the same again: *Saved answer · free*. **Get a new answer** makes another version. Try an off-syllabus question (*Who won the 2011 World Cup?*): it says *Not in your textbook*. **Expand** widens the drawer. **Follow-ups:** ask *Importance of a balance sheet*, then *What are its limitations?*: the second shows *Answering: What are the limitations of a balance sheet?* and cites the right pages.
 10. **Ask (phone):** as the student, open the **Learn** tab and ask a question. The charge comes from the student's class wallet (then own).
 11. **Evaluation:** in a new terminal, `node evals/run.mjs --email <your admin email> --password <your password>` (≈ US$0.05). It prints citation accuracy (target ≥ 90%) and correctness (target ≥ 85%); **Admin → AI models** shows the scores. Add `--model openai/gpt-4o-mini` to compare models.
+
+## 3d. Board material (Phase 3)
+
+Reads the KSEAB board files **once** into the shared content store, as with the textbooks. They feed the exam strategy and are **never** searched by *Ask your textbook*. Files live in `docs\board-material\kseab-2puc-accountancy\<category folder>\` (git-ignored). Real cost: about **US$0.93** to read the 410 English pages that are uploaded (the analysis step comes later), paid from the platform wallet. `pages-to-remove.json` in that folder lists the pages that are **not** uploaded (Kannada versions, blank pages, papers repeated inside the question bank), with the reason for each; edit it if needed. Your original files are not changed.
+
+1. Restart Terminal 1 (`pnpm dev:worker`): it applies migration `0004_phase3_board_material`. **Leave it running and unchanged until step 4 is done** (a restart stops the reading).
+2. **Platform wallet:** make sure it has at least ₹150 (Admin → Credits & payments).
+3. **See the plan** (nothing is uploaded):
+
+   ```powershell
+   pnpm upload-board:local --dry-run
+   ```
+
+   It lists 23 documents with category, academic year and the pages removed, skips the byte-identical *scheme of evaluation* copy and the content-identical 2025-26 blueprint, links each `_Answers.pdf` to its paper, and removes each centum script's cover page (register number) and the pages in `pages-to-remove.json` **before** upload. Expected: *23 documents, 410 pages ≈ US$0.93*.
+4. **Upload and read everything** (Terminal 2; about 20 to 30 minutes, one document at a time):
+
+   ```powershell
+   pnpm upload-board:local --email <your admin email> --password <your password> --read
+   ```
+
+   Progress and the cost per document are printed. If it stops (e.g. the server restarted), run the same command again: uploads aren't repeated and reading continues where it stopped.
+5. **Review:** Admin → Textbooks → **Board material**. A document with pages left out shows a *Pages left out before storing* card (original page numbers + why each range was left out); page tiles and the page viewer also show each page's **original** page number, because the stored copy is numbered from 1 again. Documents uploaded before reasons were recorded: run the step 4 command again **without** `--read`; it only records the reasons (nothing is uploaded or read again). Open the documents with underlined (flagged) pages; compare PDF and text as for the textbooks. Spot-check a centum script: no register number or name should appear in the text.
+6. **Publish** each board document (as for textbooks). Institutions aren't needed for board material.
+7. Tell Claude when done: the analysis step (exam strategy) is built next.
+
+## 3e. Exam strategy (Phase 3)
+
+Compiles the KSEAB strategy from the published board material (3d). Real cost about **US$0.7** (shown on the button), paid from the platform wallet; nothing is charged to learners.
+
+1. Restart Terminal 1 (`pnpm dev:worker`): it loads the new `COMPILE_STRATEGY` workflow and applies migration `0006`. **Leave it running and unchanged** until the compile finishes (10 to 20 minutes).
+2. **Admin → Exam strategy** → subject *KSEAB · 2nd PUC · Accountancy* → **Compile strategy**. Progress shows step by step (pattern, papers, question bank, schemes, presentation, topics).
+3. If it stops (server restarted, or the platform wallet ran out): **Continue compiling**. Finished steps aren't repeated or paid again.
+4. **Review the draft:** the checks (⚠ = something to look at), *What matters most*, the paper pattern, each chapter (click it: allowed problem types, topics most asked first, the questions with their marking from the schemes), marks allotment, presentation rules from the centum scripts.
+5. **Approve** when it looks right (a review note is optional). Recompiling later makes a new version; approving it supersedes the old one.
 
 ## 4. After pulling new code
 
@@ -220,6 +254,7 @@ Run from `E:\repository\aicoach`.
 | Apply DB migrations | `pnpm db:migrate:local` |
 | Load pilot data | `pnpm db:seed:local` |
 | Remove leftover test data (`@example.com` accounts, E2E/Smoke colleges, their credits) | `pnpm cleanup-test:local` (runs automatically after `test:e2e`) |
+| Upload + read the board material folder (LOCAL only; `--dry-run` shows the plan) | `pnpm upload-board:local --email <admin> --password <pw> --read` |
 | Run the hourly job by hand (release stale holds, check charges against OpenRouter); cron doesn't fire under `wrangler dev` | `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+*+*+*+*"` (needs `dev:worker` running) |
 | Make a user Admin | `pnpm make-admin:local <email>` |
 | Recent dev emails (codes, links) | http://localhost:8787/api/dev/outbox?to=&lt;email&gt; |

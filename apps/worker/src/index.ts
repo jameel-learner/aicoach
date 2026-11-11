@@ -9,6 +9,8 @@ import { createNotifier, memoryOutbox } from './lib/notifier';
 import { runScheduled } from './cron';
 import { adminRoutes } from './routes/admin';
 import { bookRoutes } from './routes/books';
+import { strategyRoutes } from './routes/strategy';
+import { savedAnswerRoutes } from './routes/saved-answers';
 import { evalRoutes } from './routes/evals';
 import { aiRoutes } from './routes/ai';
 import { askRoutes } from './routes/ask';
@@ -59,6 +61,8 @@ export function createApp() {
   app.route('/catalog', catalogRoutes);
   app.route('/admin/models', modelRoutes);
   app.route('/admin/books', bookRoutes);
+  app.route('/admin/strategy', strategyRoutes);
+  app.route('/admin/saved-answers', savedAnswerRoutes);
   app.route('/admin/evals', evalRoutes);
   app.route('/admin/credits', adminCreditRoutes);
   app.route('/admin', adminRoutes);
@@ -101,3 +105,4 @@ export default {
 
 // Durable Workflow classes must be exported from the entry module (they are functions/classes).
 export { IngestBookWorkflow } from './content/workflow';
+export { CompileStrategyWorkflow } from './strategy/workflow';

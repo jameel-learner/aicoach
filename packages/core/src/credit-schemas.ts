@@ -145,7 +145,60 @@ export const bookMetaSchema = z.object({
     .trim()
     .regex(/^[a-z]{2}$/, 'Use a 2-letter language code like en')
     .default('en'),
+  /** Board material (decision 9.5-2): never searched by Ask; feeds the exam strategy. */
+  kind: z.enum(['textbook', 'board_material']).default('textbook'),
+  category: z
+    .enum(['blueprint', 'model_paper', 'board_paper', 'scheme', 'question_bank', 'answer_script'])
+    .optional(),
+  academicYear: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}$/, 'Use an academic year like 2026-27')
+    .optional(),
+  /** A scheme of evaluation → the paper it answers. */
+  relatedBookId: z.string().min(1).optional(),
 });
+
+/** Why pages were left out, per range of original page numbers (shown to the Admin). */
+export const removedReasonsSchema = z
+  .array(
+    z.object({
+      pages: z.string().trim().min(1).max(200),
+      why: z.string().trim().min(3, 'Say why the pages were removed').max(400),
+    }),
+  )
+  .max(50);
+export const setRemovedReasonsSchema = z.object({ reasons: removedReasonsSchema });
+
+export const BOARD_CATEGORIES = {
+  blueprint: 'Blueprint',
+  model_paper: 'Model question paper',
+  board_paper: 'Board exam paper',
+  scheme: 'Scheme of evaluation / model answers',
+  question_bank: 'Question bank',
+  answer_script: 'Sample answer script (centum)',
+} as const;
+
+/**
+ * Pages to remove before a PDF is stored, e.g. "1" or "1, 3-4" (1-based). Returns sorted unique
+ * page numbers, or an error message.
+ */
+export function parsePageList(text: string, pageCount: number): number[] | string {
+  const out = new Set<number>();
+  for (const part of text
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)) {
+    const m = /^(\d+)(?:\s*-\s*(\d+))?$/.exec(part);
+    if (!m) return `"${part}" is not a page or range (use e.g. 1, 3-4)`;
+    const a = Number(m[1]);
+    const b = Number(m[2] ?? m[1]);
+    if (a < 1 || b < a || b > pageCount) return `Pages must be between 1 and ${pageCount}`;
+    for (let p = a; p <= b; p++) out.add(p);
+  }
+  if (out.size >= pageCount) return 'At least one page must remain';
+  return [...out].sort((x, y) => x - y);
+}
 
 /** Admin review of one parsed page: corrected Markdown (optional) and approval. */
 export const updateBookPageSchema = z.object({

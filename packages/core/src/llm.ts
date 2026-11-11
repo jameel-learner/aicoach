@@ -16,6 +16,7 @@ export const LLM_TASKS = {
   speech_to_text: { label: 'Voice input', needs: ['audio'] },
   paper_builder: { label: 'Test paper builder', needs: ['text', 'json'] },
   eval_judge: { label: 'Evaluation judge (quality scores)', needs: ['text', 'json'] },
+  board_analysis: { label: 'Board material analysis (exam strategy)', needs: ['text', 'json'] },
 } as const satisfies Record<string, { label: string; needs: readonly Capability[] }>;
 
 export type LlmTask = keyof typeof LLM_TASKS;

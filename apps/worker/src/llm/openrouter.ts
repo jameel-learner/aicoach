@@ -28,6 +28,8 @@ export interface ChatRequest {
   responseFormat?: { type: 'json_object' } | { type: 'json_schema'; json_schema: unknown };
   /** OpenRouter plugins, e.g. [{ id: 'file-parser', pdf: { engine: 'mistral-ocr' } }]. */
   plugins?: unknown[];
+  /** OpenRouter reasoning control, e.g. { max_tokens: 0 } (no thinking) or { effort: 'low' }. */
+  reasoning?: { max_tokens?: number; effort?: 'low' | 'medium' | 'high'; exclude?: boolean };
   /**
    * Stream the answer: called with each piece of text as it arrives. The cost still comes from
    * OpenRouter (the final stream chunk carries `usage.cost`).
@@ -79,6 +81,7 @@ export async function chatCompletion(
   if (req.temperature != null) body.temperature = req.temperature;
   if (req.responseFormat) body.response_format = req.responseFormat;
   if (req.plugins?.length) body.plugins = req.plugins;
+  if (req.reasoning) body.reasoning = req.reasoning;
   if (req.onDelta) body.stream = true;
 
   let res: Response;

@@ -1,0 +1,1 @@
+ALTER TABLE `books` ADD `removed_reasons` text;

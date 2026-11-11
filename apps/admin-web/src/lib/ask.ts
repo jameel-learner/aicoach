@@ -21,7 +21,7 @@ export type AskEvent =
   | { type: 'delta'; text: string }
   | {
       type: 'done';
-      answerId: string;
+      answerId: string | null;
       question: string;
       answer: string;
       citations: Citation[];

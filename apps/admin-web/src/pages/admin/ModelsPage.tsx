@@ -208,6 +208,9 @@ export function ModelsPage() {
       <div className="mt-6">
         <EvalScores />
       </div>
+      <div className="mt-6">
+        <SavedAnswers />
+      </div>
     </>
   );
 }
@@ -326,5 +329,90 @@ function TaskRow({
         </Select>
       </Td>
     </tr>
+  );
+}
+
+interface SavedGenerator {
+  generator: string;
+  model: string;
+  promptVersion: string;
+  total: number;
+  reusable: number;
+  reused: number;
+  lastAt: string | null;
+  current: boolean;
+}
+
+/**
+ * Saved answers of "Ask your textbook" per generator (tutor model + prompt version, decision 9.5-3).
+ * Only the current generator's answers are reused; Stop reusing retires them (kept, never deleted).
+ */
+function SavedAnswers() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ['admin', 'saved-answers'],
+    queryFn: () => api<{ current: string; generators: SavedGenerator[] }>('/admin/saved-answers'),
+  });
+  const [done, setDone] = useState<string | null>(null);
+  const retire = useMutation({
+    mutationFn: (generator: string) =>
+      api<{ retired: number }>('/admin/saved-answers/retire', {
+        method: 'POST',
+        body: { generator },
+      }),
+    onSuccess: (r) => {
+      setDone(`${r.retired} saved answers will no longer be reused.`);
+      void qc.invalidateQueries({ queryKey: ['admin', 'saved-answers'] });
+    },
+  });
+  return (
+    <Card title="Saved answers (Ask your textbook)">
+      <p className="mb-3 text-sm text-muted">
+        A question asked again (or a very similar one) gets its saved answer free. Only answers of
+        the <strong>current</strong> tutor model and prompt version are reused, so a model switch
+        takes effect at once; switching back reuses that model's answers again. Stop reusing keeps
+        the answers as history but never serves them again (e.g. after correcting a textbook page).
+      </p>
+      <ErrorText
+        error={q.error ? errorMessage(q.error) : retire.error ? errorMessage(retire.error) : null}
+      />
+      <Table
+        head={['Model', 'Prompt', 'Saved', 'Reusable', 'Times reused', 'Last saved', '']}
+        empty={q.data?.generators.length === 0}
+      >
+        {q.data?.generators.map((g) => (
+          <tr key={g.generator}>
+            <Td className="font-medium">
+              {g.model} {g.current && <Badge tone="good">in use</Badge>}
+            </Td>
+            <Td>{g.promptVersion}</Td>
+            <Td>{g.total}</Td>
+            <Td>{g.reusable}</Td>
+            <Td>{g.reused}</Td>
+            <Td>{g.lastAt ? fmtDate(g.lastAt) : '–'}</Td>
+            <Td>
+              {g.reusable > 0 && (
+                <Button
+                  variant="danger"
+                  className="min-h-9 px-3 text-sm"
+                  disabled={retire.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Stop reusing ${g.reusable} saved answers of ${g.model} (${g.promptVersion})? The next time each question is asked it is answered fresh (charged).`,
+                      )
+                    )
+                      retire.mutate(g.generator);
+                  }}
+                >
+                  Stop reusing
+                </Button>
+              )}
+            </Td>
+          </tr>
+        ))}
+      </Table>
+      {done && <p className="mt-2 text-sm">{done}</p>}
+    </Card>
   );
 }

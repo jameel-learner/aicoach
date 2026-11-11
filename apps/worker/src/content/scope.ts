@@ -52,7 +52,8 @@ export interface ScopeInput {
 }
 
 async function publishedBooks(db: Db, where: { offeringId?: string; ids?: string[] }) {
-  const conds = [isNotNull(books.publishedVersion)];
+  // Ask searches textbooks only; board material (papers, schemes, …) feeds the exam strategy.
+  const conds = [isNotNull(books.publishedVersion), eq(books.kind, 'textbook')];
   if (where.offeringId) conds.push(eq(books.offeringId, where.offeringId));
   if (where.ids) conds.push(inArray(books.id, where.ids.slice(0, 50)));
   const rows = await db
