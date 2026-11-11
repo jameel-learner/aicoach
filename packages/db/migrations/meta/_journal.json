@@ -57,6 +57,20 @@
       "when": 1794369157408,
       "tag": "0007_phase3_answer_generator",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794374185334,
+      "tag": "0008_phase3_learning_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794394405295,
+      "tag": "0009_phase3_asset_reviews",
+      "breakpoints": true
     }
   ]
 }

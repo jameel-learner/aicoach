@@ -1,8 +1,10 @@
 import { formatInr } from '@aicoach/core';
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState, type ComponentRef } from 'react';
+import { useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Body, Button, Card, ErrorText, Heading, Screen, Title } from '../../components/ui';
+import { useRouter, type Href } from 'expo-router';
+import { ChapterList } from '../../components/ChapterList';
+import { Body, Button, Card, Choice, ErrorText, Heading, Screen, Title } from '../../components/ui';
 import { Markdown } from '../../components/Markdown';
 import { api, errorMessage } from '../../lib/api';
 import { askStream, historyOf, wasRewritten, type Citation, type DoneEvent } from '../../lib/ask';
@@ -20,8 +22,41 @@ interface Turn {
   pending: boolean;
 }
 
-/** Learn tab: "Ask your textbook" (spec 1.1–1.4). Answer first, streamed, with page citations. */
+type Mode = 'chapters' | 'ask';
+
+function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  return (
+    <Choice
+      label="Learn by"
+      value={mode}
+      onChange={onChange}
+      options={[
+        { value: 'chapters', label: 'Chapters' },
+        { value: 'ask', label: 'Ask your textbook' },
+      ]}
+    />
+  );
+}
+
+/**
+ * Learn tab: the chapters' approved notes, memory maps and cards (Phase 3, saved for offline use
+ * once opened), and "Ask your textbook" (spec 1.1–1.4).
+ */
 export default function Learn() {
+  const [mode, setMode] = useState<Mode>('chapters');
+  const router = useRouter();
+  if (mode === 'ask') return <AskView switcher={<ModeSwitch mode={mode} onChange={setMode} />} />;
+  return (
+    <Screen>
+      <Title>Learn</Title>
+      <ModeSwitch mode={mode} onChange={setMode} />
+      <ChapterList mode="study" onOpen={(no) => router.push(`/chapter/${no}` as Href)} />
+    </Screen>
+  );
+}
+
+/** "Ask your textbook": answer first, streamed, with page citations. */
+function AskView({ switcher }: { switcher: ReactNode }) {
   const { colors, fontSize, radius, minTouchTarget } = useTheme();
   const { active } = useEnrolment();
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -64,6 +99,7 @@ export default function Learn() {
   return (
     <Screen scroll={false}>
       <Title>Ask your textbook</Title>
+      {switcher}
       <Body muted>
         {scope.error
           ? errorMessage(scope.error)

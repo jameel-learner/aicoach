@@ -43,6 +43,12 @@
       "binding": "COMPILE_STRATEGY",
       "class_name": "CompileStrategyWorkflow",
     },
+    // Learning material from the approved strategy (LOCAL only; staging imports the result).
+    {
+      "name": "aicoach-generate-assets",
+      "binding": "GENERATE_ASSETS",
+      "class_name": "GenerateAssetsWorkflow",
+    },
   ],
   "vars": {
     "APP_ENV": "development",

@@ -59,8 +59,6 @@ export interface CompileParams {
 const BANK_WINDOW = 12;
 /** Question-bank pages before the questions start (pattern, instructions, index) go to "structure". */
 const BANK_FRONT_PAGES = 5;
-/** Thinking off for extraction: the work is careful reading, and thinking tokens cost output price. */
-const REASONING = { max_tokens: 0 } as const;
 
 type Book = typeof books.$inferSelect;
 
@@ -157,7 +155,8 @@ async function askJson<S extends z.ZodTypeAny>(
       userId: run.userId,
       maxTokens,
       responseFormat: { type: 'json_object' },
-      reasoning: REASONING,
+      // Extraction is careful reading; thinking tokens cost output price (mapped per model).
+      thinking: 'off',
       messages,
     });
     await db

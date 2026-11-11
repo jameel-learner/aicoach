@@ -6,3 +6,4 @@ export * from './llm';
 export * from './money';
 export * from './credit-schemas';
 export * from './strategy';
+export * from './assets';

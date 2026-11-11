@@ -10,6 +10,7 @@ import { runScheduled } from './cron';
 import { adminRoutes } from './routes/admin';
 import { bookRoutes } from './routes/books';
 import { strategyRoutes } from './routes/strategy';
+import { materialRoutes } from './routes/material';
 import { savedAnswerRoutes } from './routes/saved-answers';
 import { evalRoutes } from './routes/evals';
 import { aiRoutes } from './routes/ai';
@@ -21,6 +22,8 @@ import { institutionRoutes } from './routes/institution';
 import { meRoutes } from './routes/me';
 import { parentConsentRoutes } from './routes/parent-consent';
 import { teacherRoutes } from './routes/teacher';
+import { reviewRoutes } from './routes/review';
+import { learnerMaterialRoutes } from './routes/learn-material';
 
 export function createApp() {
   const app = new Hono<AppBindings>().basePath('/api');
@@ -62,6 +65,7 @@ export function createApp() {
   app.route('/admin/models', modelRoutes);
   app.route('/admin/books', bookRoutes);
   app.route('/admin/strategy', strategyRoutes);
+  app.route('/admin/material', materialRoutes);
   app.route('/admin/saved-answers', savedAnswerRoutes);
   app.route('/admin/evals', evalRoutes);
   app.route('/admin/credits', adminCreditRoutes);
@@ -69,6 +73,8 @@ export function createApp() {
   app.route('/credits', creditRoutes);
   app.route('/ai', aiRoutes);
   app.route('/ask', askRoutes);
+  app.route('/review', reviewRoutes);
+  app.route('/material', learnerMaterialRoutes);
   app.route('/institutions', institutionRoutes);
   app.route('/teacher', teacherRoutes);
   app.route('/parent-consent', parentConsentRoutes);
@@ -106,3 +112,4 @@ export default {
 // Durable Workflow classes must be exported from the entry module (they are functions/classes).
 export { IngestBookWorkflow } from './content/workflow';
 export { CompileStrategyWorkflow } from './strategy/workflow';
+export { GenerateAssetsWorkflow } from './assets/workflow';

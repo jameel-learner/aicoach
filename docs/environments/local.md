@@ -192,6 +192,23 @@ Compiles the KSEAB strategy from the published board material (3d). Real cost ab
 4. **Review the draft:** the checks (⚠ = something to look at), *What matters most*, the paper pattern, each chapter (click it: allowed problem types, topics most asked first, the questions with their marking from the schemes), marks allotment, presentation rules from the centum scripts.
 5. **Approve** when it looks right (a review note is optional). Recompiling later makes a new version; approving it supersedes the old one.
 
+## 3f. Learning material: notes (Phase 3)
+
+Notes per topic and marks level from the **approved** strategy (3e). Development uses Gemini (all notes ≈ US$1.5–2); everything is regenerated with Claude Opus or Sonnet before production (decision 9.5-4).
+
+1. Restart Terminal 1 (`pnpm dev:worker`): it loads the `GENERATE_ASSETS` workflow (migration `0008` is applied). Leave it running and unchanged while notes are generated.
+2. **Admin → Learning material** → tick **one chapter** (e.g. 9 Accounting Ratios) → **Generate**. The button shows the number of notes and the estimate.
+3. Open notes from the list: the note (with page references), the code checks (⚠ = look closely), the critic's scores and issues. **Approve** with your score (1–5) or **Reject** with a reason. The Phase 3 exit asks for a reviewer score of 4 or more on a sample.
+4. **Comparing models:** set the writer (*Notes, cards, question bank*) and the critic in Admin → AI models, then generate the same chapter again. The new versions replace the older drafts in the list, but the older ones are kept: open a note and use the **Versions** strip to switch between them (older versions are view only). Set the models back afterwards.
+5. **Each note has two parts:** *Write this in the exam* (the answer a student writes, sized to the minutes the paper allows; the check `Exam answer fits N min` warns when it is too long) and *Understand it* (read, not memorised). To change a note, type a comment under **Your review** and press **Rewrite with my comment**: it comes back as a new version to review (about a minute; the old draft is marked rejected with your comment). Notes made before `note@2` show the older shape until regenerated.
+6. **Cards & memory maps** tab: one set per chapter (a memory map + 8–40 quick cards to memorise). Generate a chapter after its notes (the cards use the notes' summaries and key terms). Review, rewrite and versions work as for notes. **Subject map** tab: chapter weights and most-asked topics, built from the strategy (free).
+7. **Question bank** tab: one set per chapter and blueprint part (1-mark sets of 10, 2-mark of 5, 6-mark of 3, 12-mark of 2). Open a set to see each question with its type, difficulty, model answer and marking points. Watch the checks *Not copied from past papers* and *Marking points add up*. Review, rewrite and versions as for notes.
+8. **Concept graph** tab: one graph for the subject (which topics to learn first). Generate after the notes (it reads their summaries); check *No cycles* and *Only known topics*.
+9. **Teacher review:** sign in to the web app as a teacher who teaches the subject → Teaching → **Review material** → score (1–5) and comment. The Admin sees the scores on each item and the average under the tabs.
+10. **On the phone** (`pnpm dev:mobile`, a student enrolled in the subject): Learn → **Chapters** shows only **approved** material; open a chapter (notes, cards, questions), then turn on airplane mode and open it again: it is read from the phone. Practice shows the question bank.
+11. **Share with other environments** (top of Learning material): **Publish approved material** puts the approved strategy and every approved item in the shared store as a new version (no model calls). Staging imports it at phase end.
+12. When the chapter looks good, generate the rest (untick all = all chapters). A stopped run: **Continue** (notes already written aren't paid again).
+
 ## 4. After pulling new code
 
 When a phase adds dependencies or database changes:

@@ -148,6 +148,8 @@ Answer **y** when it asks to apply the migrations. The start-up list must show `
 7. **Remove an enrolment:** Admin → **Users** → the student → **Show** under *Classes & subjects* (optional; re-join with the class code afterwards).
 8. **Admin → Credits & payments:** the *Platform float* shows the answers' cost. *Charged vs OpenRouter* fills in after the hourly job has run.
 
+**Learning material (Phase 3 onwards).** On local first: Learning material → **Publish approved material**. On staging: import the textbooks it cites (step 1), then Admin → **Learning material** → *Share with other environments* → **Import vN** (seconds, no model calls; the strategy comes with it). Generating is refused on staging (*Generate on local, then import here*). Check on the phone (`pnpm dev:mobile:staging`, a staging student enrolled in the subject): Learn → Chapters shows the approved chapters. After more material is approved on local: publish again, import again (what is already here is skipped).
+
 The staging answer cache is separate from local, so the first answers on staging are fresh (charged) ones. The whole test costs well under ₹1.
 
 **5. Sign off:** tell Claude Phase 2 works on staging. Claude records it in progress.md and starts Phase 3.

@@ -23,6 +23,8 @@ export interface Env {
   INGEST_BOOK?: Workflow<import('./content/ingest').IngestParams>;
   /** Exam strategy compile (LOCAL only, like ingestion; decision 9.5-2). */
   COMPILE_STRATEGY?: Workflow<import('./strategy/compile').CompileParams>;
+  /** Learning material generation (LOCAL only; decision 9.5-4). */
+  GENERATE_ASSETS?: Workflow<import('./assets/generate').GenerateParams>;
   // Secrets
   BETTER_AUTH_SECRET: string;
   RESEND_API_KEY?: string;

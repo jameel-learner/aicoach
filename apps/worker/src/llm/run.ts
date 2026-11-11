@@ -39,6 +39,11 @@ export interface MeteredChatInput {
   responseFormat?: ChatRequest['responseFormat'];
   plugins?: ChatRequest['plugins'];
   reasoning?: ChatRequest['reasoning'];
+  /**
+   * Model-neutral thinking control, mapped per configured model (reasoningFor). Use this rather
+   * than `reasoning`, so switching the task's model in Admin can't break the request.
+   */
+  thinking?: 'off' | 'low';
   /** Non-token charges to add to the hold estimate (e.g. OCR at ~$0.002/page), nano-USD. */
   extraEstimateUsdNano?: number;
   /** Stream the answer text as it arrives (settled at the real cost when the stream ends). */
@@ -58,6 +63,16 @@ export interface MeteredChatResult {
   billedMicro: number;
   cacheHit: boolean;
   fileText: string | null;
+}
+
+/**
+ * "Thinking off/low" for a model. Claude 5.x models can't have thinking switched off through every
+ * route (Opus 5.5 rejects it outright), so they get low effort; other models (Gemini, OpenAI) can
+ * turn it off with a zero thinking budget.
+ */
+export function reasoningFor(model: string, level: 'off' | 'low'): ChatRequest['reasoning'] {
+  if (/^anthropic\//.test(model)) return { effort: 'low' };
+  return level === 'off' ? { max_tokens: 0 } : { effort: 'low' };
 }
 
 export async function runMeteredChat(
@@ -102,7 +117,8 @@ export async function runMeteredChat(
       temperature: cfg.temperature,
       responseFormat: input.responseFormat,
       plugins: input.plugins,
-      reasoning: input.reasoning,
+      reasoning:
+        input.reasoning ?? (input.thinking ? reasoningFor(models[0]!, input.thinking) : undefined),
       onDelta: input.onDelta,
     });
     const settled = await settleHold(db, hold, {

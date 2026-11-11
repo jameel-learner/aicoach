@@ -24,6 +24,7 @@ export function navFor(me: MeResponse): { section: string; items: NavItem[] }[] 
         { to: '/admin/models', label: 'AI models' },
         { to: '/admin/books', label: 'Textbooks' },
         { to: '/admin/strategy', label: 'Exam strategy' },
+        { to: '/admin/material', label: 'Learning material' },
         { to: '/credits', label: 'Wallets' },
         { to: '/playground', label: 'AI playground' },
       ],
@@ -51,6 +52,7 @@ export function navFor(me: MeResponse): { section: string; items: NavItem[] }[] 
       section: 'Teaching',
       items: [
         { to: '/teacher', label: 'My classes' },
+        { to: '/teacher/material', label: 'Review material' },
         { to: '/credits', label: 'Credits' },
         { to: '/playground', label: 'AI playground' },
       ],

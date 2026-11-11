@@ -13,6 +13,7 @@ import { ModelsPage } from './pages/admin/ModelsPage';
 import { BookPage } from './pages/admin/BookPage';
 import { BooksPage } from './pages/admin/BooksPage';
 import { StrategyPage } from './pages/admin/StrategyPage';
+import { MaterialPage } from './pages/admin/MaterialPage';
 import { TaxonomyPage } from './pages/admin/TaxonomyPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { AuthPage } from './pages/AuthPage';
@@ -22,6 +23,7 @@ import { CreditsHomePage } from './pages/credits/CreditsHomePage';
 import { WalletPage } from './pages/credits/WalletPage';
 import { PlaygroundPage } from './pages/PlaygroundPage';
 import { ClassStudentsPage, TeacherClassesPage } from './pages/TeacherPages';
+import { TeacherMaterialPage } from './pages/TeacherMaterialPage';
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
@@ -74,6 +76,11 @@ const institutionRoute = createRoute({
   component: InstitutionPage,
 });
 const teacherRoute = createRoute({ ...parent, path: '/teacher', component: TeacherClassesPage });
+const teacherMaterialRoute = createRoute({
+  ...parent,
+  path: '/teacher/material',
+  component: TeacherMaterialPage,
+});
 const adminCreditsRoute = createRoute({
   ...parent,
   path: '/admin/credits',
@@ -81,6 +88,11 @@ const adminCreditsRoute = createRoute({
 });
 const adminModelsRoute = createRoute({ ...parent, path: '/admin/models', component: ModelsPage });
 const adminBooksRoute = createRoute({ ...parent, path: '/admin/books', component: BooksPage });
+const adminMaterialRoute = createRoute({
+  ...parent,
+  path: '/admin/material',
+  component: MaterialPage,
+});
 const adminStrategyRoute = createRoute({
   ...parent,
   path: '/admin/strategy',
@@ -113,12 +125,14 @@ const routeTree = rootRoute.addChildren([
     adminUsersRoute,
     institutionRoute,
     teacherRoute,
+    teacherMaterialRoute,
     classRoute,
     adminCreditsRoute,
     adminModelsRoute,
     adminBooksRoute,
     adminBookRoute,
     adminStrategyRoute,
+    adminMaterialRoute,
     creditsRoute,
     walletRoute,
     playgroundRoute,

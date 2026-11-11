@@ -821,3 +821,100 @@ export const boardItems = sqliteTable(
     index('board_items_book_idx').on(t.strategyId, t.bookId),
   ],
 );
+
+// ---------------------------------------------------------------- Phase 3: learning material
+
+/** One generation run (a set of slots, e.g. all notes of chapters 3 and 9). LOCAL only. */
+export const generationRuns = sqliteTable('generation_runs', {
+  id: id(),
+  offeringId: text('offering_id')
+    .notNull()
+    .references(() => subjectOfferings.id),
+  /** The approved strategy version the material follows. */
+  strategyId: text('strategy_id')
+    .notNull()
+    .references(() => examStrategies.id),
+  kind: text('kind', { enum: ['note', 'cards', 'questions', 'graph'] }).notNull(),
+  /** Chapters in scope (null = all). */
+  chapters: text('chapters', { mode: 'json' }).$type<number[] | null>(),
+  status: text('status', { enum: ['running', 'done', 'failed'] })
+    .notNull()
+    .default('running'),
+  statusMessage: text('status_message'),
+  /** { done, total, label, checkpoints } (finished slots are skipped when continuing). */
+  progress: text('progress', { mode: 'json' }).$type<Record<string, unknown>>(),
+  costUsdNano: integer('cost_usd_nano').notNull().default(0),
+  workflowId: text('workflow_id'),
+  createdBy: text('created_by').notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * A generated learning asset (decision 9.5-4): stable slot + version. draft → approved (what learners
+ * see) → superseded by the next approved version; or rejected.
+ */
+export const learningAssets = sqliteTable(
+  'learning_assets',
+  {
+    id: id(),
+    offeringId: text('offering_id')
+      .notNull()
+      .references(() => subjectOfferings.id),
+    slotKey: text('slot_key').notNull(),
+    version: integer('version').notNull(),
+    kind: text('kind', { enum: ['note', 'cards', 'questions', 'graph'] }).notNull(),
+    chapter: integer('chapter').notNull(),
+    topic: text('topic').notNull(),
+    marks: integer('marks').notNull(),
+    status: text('status', { enum: ['draft', 'approved', 'rejected', 'superseded'] })
+      .notNull()
+      .default('draft'),
+    /** The asset (e.g. NoteDraft, packages/core/src/assets.ts). */
+    content: text('content', { mode: 'json' }).$type<unknown>().notNull(),
+    critique: text('critique', { mode: 'json' }).$type<unknown>(),
+    checks: text('checks', { mode: 'json' }).$type<unknown[]>().notNull(),
+    /** Textbook excerpts it may cite ([S#] → book/page). */
+    sources: text('sources', { mode: 'json' }).$type<unknown[]>().notNull(),
+    /** "writer model|critic model|prompt version" (regenerate before production: decision 9.5-4). */
+    generator: text('generator').notNull(),
+    fixed: integer('fixed', { mode: 'boolean' }).notNull().default(false),
+    strategyId: text('strategy_id').references(() => examStrategies.id),
+    runId: text('run_id').references(() => generationRuns.id),
+    costUsdNano: integer('cost_usd_nano').notNull().default(0),
+    /** Reviewer's rubric score 1-5 (Phase 3 exit: ≥ 4 on a sample) and note. */
+    reviewScore: integer('review_score'),
+    reviewNote: text('review_note'),
+    reviewedBy: text('reviewed_by'),
+    reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('learning_assets_slot_version_uq').on(t.slotKey, t.version),
+    index('learning_assets_offering_idx').on(t.offeringId, t.kind, t.chapter, t.status),
+  ],
+);
+
+/** A teacher's (or Admin's) rubric score and comment on a generated asset (Phase 3 exit: ≥ 4/5). */
+export const assetReviews = sqliteTable(
+  'asset_reviews',
+  {
+    id: id(),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => learningAssets.id),
+    reviewerId: text('reviewer_id')
+      .notNull()
+      .references(() => user.id),
+    role: text('role', { enum: ['teacher', 'admin'] }).notNull(),
+    score: integer('score').notNull(),
+    comment: text('comment'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('asset_reviews_asset_reviewer_uq').on(t.assetId, t.reviewerId),
+    index('asset_reviews_asset_idx').on(t.assetId),
+  ],
+);

@@ -17,6 +17,10 @@ export const LLM_TASKS = {
   paper_builder: { label: 'Test paper builder', needs: ['text', 'json'] },
   eval_judge: { label: 'Evaluation judge (quality scores)', needs: ['text', 'json'] },
   board_analysis: { label: 'Board material analysis (exam strategy)', needs: ['text', 'json'] },
+  content_review: {
+    label: 'Learning material critic (checks generated notes, questions)',
+    needs: ['text', 'json'],
+  },
 } as const satisfies Record<string, { label: string; needs: readonly Capability[] }>;
 
 export type LlmTask = keyof typeof LLM_TASKS;

@@ -60,6 +60,7 @@ function RootNavigator() {
         <Stack.Protected guard={meReady && !needsOnboarding}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="join-class" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="chapter/[no]" />
         </Stack.Protected>
       </Stack>
       {(showLoading || showError) && (

@@ -31,8 +31,9 @@ export default defineConfig(async () => {
     ],
     test: {
       setupFiles: ['./test/setup.ts'],
-      // Each test signs users in (PBKDF2 + several requests); allow for slow CI machines.
-      testTimeout: 20_000,
+      // Each test signs users in (PBKDF2 + several requests). With 8 files running in parallel a
+      // single test took > 20 s on the dev machine (2026-11-11), so allow 60 s.
+      testTimeout: 60_000,
     },
   };
 });
