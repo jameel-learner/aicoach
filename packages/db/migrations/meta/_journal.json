@@ -71,6 +71,13 @@
       "when": 1794394405295,
       "tag": "0009_phase3_asset_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794418362017,
+      "tag": "0010_phase4_sessions",
+      "breakpoints": true
     }
   ]
 }

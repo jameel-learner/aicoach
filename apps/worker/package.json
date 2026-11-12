@@ -21,6 +21,7 @@
   "dependencies": {
     "@aicoach/core": "workspace:*",
     "@aicoach/db": "workspace:*",
+    "@aicoach/journeys": "workspace:*",
     "@better-auth/expo": "1.7.18",
     "better-auth": "1.7.18",
     "drizzle-orm": "0.45.4",

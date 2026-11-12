@@ -1,11 +1,13 @@
 import {
+  MASTERY_LABELS,
   mathToText,
+  stripCitations,
   type AssetSource,
   type CardsDraft,
   type GeneratedQuestion,
   type StoredNote,
 } from '@aicoach/core';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { OfflineNote, Pill } from '../../components/ChapterList';
@@ -14,6 +16,7 @@ import { Body, Button, Card, Choice, ErrorText, Heading, Screen, Title } from '.
 import { errorMessage } from '../../lib/api';
 import { useEnrolment } from '../../lib/enrolment-context';
 import { useChapter, type Asset, type ChapterMaterial } from '../../lib/material';
+import { startSession, useTopicLevels } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 
 type Tab = 'notes' | 'cards' | 'questions';
@@ -52,7 +55,12 @@ export default function ChapterScreen() {
             ]}
           />
           {tab === 'notes' && <Notes d={d} />}
-          {tab === 'cards' && <Cards cards={d.cards} />}
+          {tab === 'cards' && (
+            <>
+              {d.cards && !d.offline && <StartSession journey="memorise" chapter={d.chapter.no} />}
+              <Cards cards={d.cards} />
+            </>
+          )}
           {tab === 'questions' && <Questions sets={d.questions} />}
         </>
       )}
@@ -74,10 +82,57 @@ function usePageBadge(sources: AssetSource[]) {
   };
 }
 
+/**
+ * Opens a study session (Phase 4): step by step through one topic, or today's cards of the chapter.
+ * Students only; an open session for the same topic is resumed.
+ */
+function StartSession({
+  journey,
+  chapter,
+  topic,
+}: {
+  journey: 'explain' | 'memorise';
+  chapter: number;
+  topic?: string;
+}) {
+  const router = useRouter();
+  const { active } = useEnrolment();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (active?.roleIn !== 'student') return null;
+  async function go() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { view } = await startSession({ journey, enrolmentId: active?.id, chapter, topic });
+      router.push(`/session/${view.sessionId}` as Href);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <View style={{ gap: 4 }}>
+      <Button
+        title={journey === 'explain' ? 'Learn this step by step (8 min)' : "Practise today's cards"}
+        variant={journey === 'explain' ? 'secondary' : 'primary'}
+        loading={busy}
+        onPress={() => void go()}
+      />
+      <ErrorText error={error} />
+    </View>
+  );
+}
+
 function Notes({ d }: { d: ChapterMaterial }) {
   const { colors, fontSize } = useTheme();
+  const { active } = useEnrolment();
+  const levels = useTopicLevels(active?.roleIn === 'student' ? active.id : undefined);
   if (!d.notes.length) return <Body muted>No notes for this chapter yet.</Body>;
   const topics = [...new Set(d.notes.map((n) => n.topic))];
+  const levelOf = (t: string) =>
+    levels.data?.topics.find((x) => x.chapter === d.chapter.no && x.topic === t)?.level ?? 0;
   return (
     <View style={{ gap: 16 }}>
       {topics.map((t) => {
@@ -85,6 +140,7 @@ function Notes({ d }: { d: ChapterMaterial }) {
         return (
           <View key={t} style={{ gap: 8 }}>
             <Heading>{t}</Heading>
+            {levelOf(t) > 0 && <Pill label={`You: ${MASTERY_LABELS[levelOf(t)]}`} />}
             {pre.length > 0 && (
               <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
                 Learn first:{' '}
@@ -100,6 +156,7 @@ function Notes({ d }: { d: ChapterMaterial }) {
               .map((n) => (
                 <NoteCard key={n.id} note={n} />
               ))}
+            {!d.offline && <StartSession journey="explain" chapter={d.chapter.no} topic={t} />}
           </View>
         );
       })}
@@ -244,7 +301,7 @@ function Cards({ cards }: { cards: Asset<CardsDraft> | null }) {
             }}
           >
             <Text style={{ color: colors.text, fontSize: fontSize.lg, textAlign: 'center' }}>
-              {mathToText(flipped ? card.back : card.front)}
+              {mathToText(stripCitations(flipped ? card.back : card.front))}
             </Text>
             <Text
               style={{

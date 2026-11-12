@@ -158,6 +158,39 @@ The staging answer cache is separate from local, so the first answers on staging
 
 ---
 
+## 3d. Phase 4 on staging (study sessions)
+
+Deployed 2026-11-12: migration `0010_phase4_sessions` and the `SESSION_AGENT` Durable Object. No new secrets. The material is already there (package v1, chapter 1).
+
+1. A **student** enrolled in the subject with a few rupees of credits (about ₹0.25 for a full session with questions; reading, cards and self-marking are free).
+2. Run the steps of [local.md §3g](local.md#3g-study-sessions-phase-4) from step 2 on, with the phone on staging (`pnpm dev:mobile:staging`, or the installed app from §3e).
+3. **Safety on staging is different from local:** staging has no real email (`EMAIL_PROVIDER=console`), so nobody receives an alert. The student still gets the fixed message with the helpline, but is **not** told that a parent was informed, and Admin → **Safety** shows the trigger as *Nobody to tell*. **Look at that page every day while students are testing, and follow up yourself.** The alert text is in `pnpm logs:staging`.
+4. If a step fails with error 1102 (CPU limit of the free plan): move to Workers Paid (§5).
+
+## 3e. The app as an APK file (for students outside your Wi-Fi)
+
+An installable Android app that talks to **staging**. It is built by Expo's build service (EAS) under your Expo account, because this PC has no Android build tools. The profile is `staging-apk` in `apps\mobile\eas.json`.
+
+```powershell
+cd E:\repository\aicoach
+pnpm build:apk:staging
+```
+
+- The **first time** it asks to create the project on your Expo account and to **generate an Android keystore**: answer **yes** to both (Expo keeps the keystore; later builds reuse it, so updates install over the old app).
+- It uploads the code (git-ignored files such as textbooks and `.dev.vars` are not uploaded), builds for 10 to 20 minutes, and prints a link to the **.apk**. Share that link or the file.
+- On the phone: open the link → download → *Install* (Android asks once to allow installs from the browser or file manager). The app shows **"STAGING server"** on the sign-in screen.
+- A new build is needed after changes to the phone app (not after server-only changes: those reach the app through `pnpm deploy:staging`).
+
+**Before you hand it to students, three limits of staging today:**
+
+| Limit | What it means for a student | What to do |
+|---|---|---|
+| **No real email** | They never receive the sign-in code, and the parent never receives the consent link or an alert | For a handful of testers: keep `pnpm logs:staging` open and send each student their 6-digit code (it appears as `[notify:email] (2fa_otp)`). For more than a handful: set up real email first (§5) |
+| **Safety alerts reach nobody** | See §3d step 3 | Check Admin → Safety daily and follow up. Have the wording reviewed by a counsellor before wider use |
+| **Free plan CPU limit** | A request can fail under load (error 1102) | Workers Paid, US$5/month (§5) |
+
+Each student also needs: your class's **join code**, and **credits** on their wallet (give them from the class wallet on the web).
+
 ## 3b. Why automated browser tests don't run on staging
 
 The Playwright tests (`test:e2e`) refuse to run unless the server says it is `development`. That's deliberate:
@@ -185,6 +218,7 @@ pnpm exec wrangler secret list --env staging   # see which exist (values are nev
 | `TURNSTILE_SECRET_KEY` | ✅ set (Cloudflare **test** key) | Phase 0 |
 | `OPENROUTER_API_KEY` | ✅ set 2026-11-09 (same key as local, per user) | Phase 1 |
 | *(none new)* | Phase 2 uses bindings, not secrets: Vectorize, R2 and Workers AI are in `env.staging` of `wrangler.jsonc` | Phase 2 |
+| *(none new)* | Phase 4 uses a binding, not a secret: the Durable Object `SESSION_AGENT` is in `env.staging` of `wrangler.jsonc`; the first deploy creates it (Durable Object migration `v1`, SQLite-backed, allowed on the free plan). Checked with `wrangler deploy --dry-run --env staging` on 2026-11-12 | Phase 4 (at phase end) |
 | `RESEND_API_KEY` | ⬜ when a sender domain exists | Pilot |
 
 Non-secret settings are under `env.staging.vars` in `apps\worker\wrangler.jsonc` (e.g. `EMAIL_PROVIDER` is `console`). They take effect on the next deploy.

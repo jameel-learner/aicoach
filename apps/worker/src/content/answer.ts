@@ -1,4 +1,4 @@
-import { mathToText } from '@aicoach/core';
+import { mathToText, splitCitations } from '@aicoach/core';
 import { answers, type Db } from '@aicoach/db';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Env, SessionUser } from '../env';
@@ -53,6 +53,11 @@ export type AskEvent =
       billedMicro: number;
       model: string | null;
     }
+  /**
+   * Distress in the question (architecture §6.2): the fixed response instead of an answer. No model
+   * was called and nothing was charged.
+   */
+  | { type: 'handoff'; title: string; text: string; helplines: string[]; told: string }
   | { type: 'error'; code: string; message: string };
 
 const SIMILAR = 0.92; // cosine similarity at which a stored answer is reused
@@ -127,7 +132,8 @@ const words = (t: string) =>
   new Set((t.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []).filter((w) => !/^\d+$/.test(w)));
 
 /** Citation verifier: which sources are cited, and does each citing sentence overlap its source? */
-export function verifyCitations(answer: string, sources: Source[]) {
+export function verifyCitations(raw: string, sources: Source[]) {
+  const answer = splitCitations(raw);
   const cited = new Map<number, boolean>();
   const sentences = answer.split(/(?<=[.!?])\s+|\n+/);
   for (const s of sentences) {
@@ -214,6 +220,29 @@ async function standaloneQuestion(
   }
 }
 
+/**
+ * Streams model text on, but holds back the first characters until it is clear the reply doesn't
+ * start with the "not in your textbook" marker (which the learner never sees).
+ */
+export function withheldMarker(emit: (text: string) => void, silent: string[] = []) {
+  const markers = [NOT_IN_TEXTBOOK, ...silent];
+  let head = '';
+  let decided = false;
+  let mute = false;
+  return (t: string) => {
+    if (mute) return;
+    if (decided) return emit(t);
+    head += t;
+    const h = head.trimStart();
+    // Still possibly the start of a marker: keep holding.
+    if (markers.some((m) => h.length < m.length && m.startsWith(h))) return;
+    decided = true;
+    // `silent` markers (the safety flag): nothing of this reply is ever shown.
+    if (silent.some((m) => h.startsWith(m))) mute = true;
+    else if (!h.startsWith(NOT_IN_TEXTBOOK)) emit(head);
+  };
+}
+
 /** Answers a question, emitting events as it goes. Throws InsufficientCredits/LlmError before any delta. */
 export async function answerQuestion(
   env: Env,
@@ -290,9 +319,6 @@ export async function answerQuestion(
   if (!sources.length) {
     answer = `${NOT_IN_TEXTBOOK} Your textbook doesn't seem to cover this.`;
   } else {
-    // Hold back the first characters until we know whether it's a "not in textbook" reply.
-    let head = '';
-    let decided = false;
     const res = await runMeteredChat(env, db, {
       task: 'tutor_chat',
       payers: scope.payers,
@@ -303,17 +329,7 @@ export async function answerQuestion(
         { role: 'system', content: TUTOR_ANSWER.system(scope.subject) },
         { role: 'user', content: TUTOR_ANSWER.user(question, sources) },
       ],
-      onDelta: (t) => {
-        if (decided) return emit({ type: 'delta', text: t });
-        head += t;
-        if (
-          head.length >= NOT_IN_TEXTBOOK.length ||
-          !NOT_IN_TEXTBOOK.startsWith(head.trimStart())
-        ) {
-          decided = true;
-          if (!head.trimStart().startsWith(NOT_IN_TEXTBOOK)) emit({ type: 'delta', text: head });
-        }
-      },
+      onDelta: withheldMarker((text) => emit({ type: 'delta', text })),
     });
     answer = res.content;
     model = res.model;

@@ -61,6 +61,8 @@ function RootNavigator() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="join-class" options={{ presentation: 'modal' }} />
           <Stack.Screen name="chapter/[no]" />
+          <Stack.Screen name="session/[id]" />
+          <Stack.Screen name="locker" />
         </Stack.Protected>
       </Stack>
       {(showLoading || showError) && (

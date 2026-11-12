@@ -50,6 +50,12 @@
       "class_name": "GenerateAssetsWorkflow",
     },
   ],
+  // One Durable Object per study session (architecture §3.7): the session's checkpoint, alarms.
+  // SQLite-backed, which the free plan supports.
+  "durable_objects": {
+    "bindings": [{ "name": "SESSION_AGENT", "class_name": "SessionAgent" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SessionAgent"] }],
   "vars": {
     "APP_ENV": "development",
     "APP_URL": "http://localhost:8787",
@@ -77,6 +83,10 @@
       "vectorize": [{ "binding": "CONTENT_VECTORS", "index_name": "aicoach-content-chunks" }],
       "r2_buckets": [{ "binding": "CONTENT", "bucket_name": "aicoach-content" }],
       "ai": { "binding": "AI" },
+      // Bindings are not inherited by environments; the migration above is.
+      "durable_objects": {
+        "bindings": [{ "name": "SESSION_AGENT", "class_name": "SessionAgent" }],
+      },
       "vars": {
         "APP_ENV": "staging",
         "APP_URL": "https://aicoach-api-staging.jameel-outskill.workers.dev",

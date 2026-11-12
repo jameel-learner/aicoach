@@ -16,6 +16,11 @@ export interface OutboundMessage {
 
 export interface Notifier {
   send(message: OutboundMessage): Promise<void>;
+  /**
+   * False when `send` only writes to a log and nobody receives anything (the console channel
+   * outside LOCAL). Callers that tell a person "we have informed X" must check it (safety handoff).
+   */
+  readonly delivers?: boolean;
 }
 
 /** Messages kept in memory for tests and the dev-only /api/dev/outbox endpoint. Capped. */
@@ -27,6 +32,8 @@ function remember(m: OutboundMessage) {
 
 /** Dev: prints messages to the terminal running `wrangler dev` (and keeps them for /api/dev/outbox). */
 export class ConsoleNotifier implements Notifier {
+  /** On LOCAL the terminal is the inbox (the developer reads it); anywhere else nobody does. */
+  constructor(readonly delivers = true) {}
   async send(m: OutboundMessage): Promise<void> {
     remember(m);
     console.log(
@@ -71,6 +78,7 @@ export function createNotifier(env: {
   EMAIL_PROVIDER: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM: string;
+  APP_ENV?: string;
 }): Notifier {
   switch (env.EMAIL_PROVIDER) {
     case 'resend':
@@ -86,6 +94,6 @@ export function createNotifier(env: {
     case 'memory':
       return new MemoryNotifier();
     default:
-      return new ConsoleNotifier();
+      return new ConsoleNotifier(env.APP_ENV === 'development');
   }
 }

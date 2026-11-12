@@ -25,6 +25,7 @@ export function navFor(me: MeResponse): { section: string; items: NavItem[] }[] 
         { to: '/admin/books', label: 'Textbooks' },
         { to: '/admin/strategy', label: 'Exam strategy' },
         { to: '/admin/material', label: 'Learning material' },
+        { to: '/admin/safety', label: 'Safety' },
         { to: '/credits', label: 'Wallets' },
         { to: '/playground', label: 'AI playground' },
       ],

@@ -7,6 +7,8 @@ import type { AppBindings } from '../env';
 import { AppError, badRequest, parseBody } from '../lib/http';
 import { LlmError } from '../llm/openrouter';
 import { requireAuth } from '../middleware/session';
+import { classify } from '../safety/classify';
+import { handoff, handoffMessage } from '../safety/handoff';
 
 /**
  * "Ask your textbook" (architecture §3.6, §7 Phase 2).
@@ -34,6 +36,27 @@ askRoutes.post('/', async (c) => {
   const scope = await askScope(db, me, body);
   if (!scope.books.length)
     throw badRequest('No textbook is set up for you yet. Ask your teacher or the institution.');
+
+  // Safety before anything else (architecture §3.6, decision 9.6-5): a distressed message gets the
+  // fixed response and a parent alert, never a model reply. Admin eval runs are not learners.
+  if (me.role !== 'admin') {
+    const safety = await classify(c.env, body.question);
+    if (safety.level === 'distress') {
+      const h = await handoff(db, c.var.notifier, me, {
+        source: 'ask',
+        rule: safety.rule,
+        detector: safety.detector,
+      });
+      const event: AskEvent = { type: 'handoff', ...handoffMessage(h.told) };
+      if (!body.stream) return c.json(event);
+      return new Response(`data: ${JSON.stringify(event)}\n\n`, {
+        headers: {
+          'content-type': 'text/event-stream; charset=utf-8',
+          'cache-control': 'no-cache, no-transform',
+        },
+      });
+    }
+  }
 
   if (!body.stream) {
     let done: Extract<AskEvent, { type: 'done' }> | null = null;

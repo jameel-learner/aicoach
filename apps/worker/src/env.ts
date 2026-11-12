@@ -25,6 +25,8 @@ export interface Env {
   COMPILE_STRATEGY?: Workflow<import('./strategy/compile').CompileParams>;
   /** Learning material generation (LOCAL only; decision 9.5-4). */
   GENERATE_ASSETS?: Workflow<import('./assets/generate').GenerateParams>;
+  /** One Durable Object per study session (src/sessions/agent.ts, decision 9.6-1). */
+  SESSION_AGENT?: DurableObjectNamespace<import('./sessions/agent').SessionAgent>;
   // Secrets
   BETTER_AUTH_SECRET: string;
   RESEND_API_KEY?: string;

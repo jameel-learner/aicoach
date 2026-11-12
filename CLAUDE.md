@@ -39,7 +39,8 @@ Board-exam-aligned AI tutor for Indian students and teachers. Mobile app (studen
 - **Grounding:** learner-facing factual answers carry textbook citations, or an explicit "not in your textbook"/uncertainty flag.
 - **Authorisation:** enforced in the API. Tenant (institution) scoping on every query. Usage visibility = own node + immediate downline, except Admin, who sees the full tree.
 - **Engagement policy:** no loss framing, fake urgency, public leaderboards or variable rewards. Notifications respect caps and quiet hours (architecture §6.1).
-- **Safety:** distress → fixed handoff response + parent alert (email via the `Notifier` interface), never an LLM pep talk.
+- **Safety:** distress → fixed handoff response + parent alert (email via the `Notifier` interface), never an LLM pep talk. Every free-text learner turn goes through `classify` (`src/safety`) before any model call; a model may only *flag* distress, never write the reply. The learner's words are never stored in `safety_events`. Add every missed phrase to `test/fixtures/safety-redteam.ts` first, then fix the rule.
+- **Journeys:** the learner's path is decided by the graph (pure code in `packages/journeys`), never by a model: the SessionAgent does the I/O and feeds the *result* in as an event. Every edge needs a test (the coverage test fails otherwise). A step that fails must leave the checkpoint unchanged.
 - **Secrets:** `.dev.vars` / `wrangler secret` only. Never in code or committed files.
 
 ## Tech stack (summary; details in architecture §5)
@@ -54,10 +55,15 @@ apps/admin-web   React + Vite web app (Admin / POC / Teacher areas); e2e/ = Play
 apps/worker      Cloudflare Worker: Hono API (src/routes), credits (src/credits), LLM path + prompts (src/llm),
                  textbooks + Q&A (src/content: store, chunk, ingest, workflow, import, scope, retrieve, answer),
                  board strategy (src/strategy), learning material (src/assets: notes, cards, questions, graph,
-                 checks, reviews, share = publish/import), cron (src/cron.ts);
+                 checks, reviews, share = publish/import), study sessions (src/sessions: agent = SessionAgent
+                 Durable Object, plan, tutor, records), safety (src/safety: rules, classify, handoff),
+                 cron (src/cron.ts);
                  scripts/ = make-admin, cleanup-test-data, upload-board-material
 packages/core    domain types, Zod schemas, money (micro-INR / nano-USD), LLM task list, exam strategy +
-                 learning asset schemas, LaTeX → plain text (latex.ts)
+                 learning asset schemas, LaTeX → plain text (latex.ts), journey graph engine (journey.ts),
+                 session views + recall schedule (session.ts), calculator check (arithmetic.ts)
+packages/journeys journey graphs, their views and outcomes (explain.ts, memorise.ts; pure, 100% transition
+                 coverage in journeys.test.ts), fixed safety wording (copy.ts)
 packages/db      Drizzle schema + migrations + seed (reference data only)
 packages/ui-tokens design tokens
 evals/           golden sets (golden/*.jsonl, optional `type`: journal/table/figure/formula) + runner
@@ -65,8 +71,7 @@ evals/           golden sets (golden/*.jsonl, optional `type`: journal/table/fig
 docs/            architecture.md (design), progress.md (status), setup-and-deployment.md + environments/
                  (how to run/deploy), engagement-policy.md (review checklist), feature_description.txt (spec)
 
-Planned (create when the phase needs it): packages/journeys (journey graphs, Phase 4). Retrieval/citations/cache
-live in apps/worker/src/content (no separate packages/rag needed so far).
+Retrieval/citations/cache live in apps/worker/src/content (no separate packages/rag needed so far).
 ```
 
 *(Keep this map current when the structure changes.)*
@@ -87,6 +92,7 @@ pm` via Corepack (`corepack enable pnpm --install-directory "$APPDATA/npm"`).
 | Dev: web app with hot reload | `pnpm dev:web` (http://localhost:5173, proxies `/api` to :8787) |
 | Dev: mobile (LOCAL backend) | `pnpm dev:mobile`, then scan the QR code in Expo Go (phone on the same Wi-Fi). API URL is auto-derived |
 | Mobile against STAGING (phase end only) | `pnpm dev:mobile:staging` |
+| Android APK that talks to STAGING (Expo cloud build; phase end only) | `pnpm build:apk:staging` (profile `staging-apk` in `apps/mobile/eas.json`; staging.md §3e) |
 | Read dev emails (OTP, consent links) | printed in the `dev:worker` terminal, or `GET /api/dev/outbox?to=<email>` (development only) |
 | Make a user Admin | `pnpm make-admin:local <email>` / `pnpm make-admin:staging <email>` |
 | Typecheck all | `pnpm typecheck` |

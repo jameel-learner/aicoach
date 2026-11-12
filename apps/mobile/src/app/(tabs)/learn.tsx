@@ -7,7 +7,14 @@ import { ChapterList } from '../../components/ChapterList';
 import { Body, Button, Card, Choice, ErrorText, Heading, Screen, Title } from '../../components/ui';
 import { Markdown } from '../../components/Markdown';
 import { api, errorMessage } from '../../lib/api';
-import { askStream, historyOf, wasRewritten, type Citation, type DoneEvent } from '../../lib/ask';
+import {
+  askStream,
+  historyOf,
+  wasRewritten,
+  type Citation,
+  type DoneEvent,
+  type HandoffEvent,
+} from '../../lib/ask';
 import { useEnrolment } from '../../lib/enrolment-context';
 import { useTheme } from '../../lib/theme';
 
@@ -18,6 +25,7 @@ interface Turn {
   answering?: string;
   text: string;
   done?: DoneEvent;
+  handoff?: HandoffEvent;
   error?: string;
   pending: boolean;
 }
@@ -90,6 +98,7 @@ function AskView({ switcher }: { switcher: ReactNode }) {
       if (e.type === 'meta') update(id, (t) => ({ ...t, answering: e.question }));
       if (e.type === 'delta') update(id, (t) => ({ ...t, text: t.text + e.text }));
       if (e.type === 'done') update(id, (t) => ({ ...t, done: e, text: e.answer, pending: false }));
+      if (e.type === 'handoff') update(id, (t) => ({ ...t, handoff: e, pending: false }));
       if (e.type === 'error') update(id, (t) => ({ ...t, error: e.message, pending: false }));
     });
     update(id, (t) => ({ ...t, pending: false }));
@@ -189,7 +198,16 @@ function TurnView({ turn, busy, onRetry }: { turn: Turn; busy: boolean; onRetry:
           Answering: {turn.answering}
         </Text>
       )}
-      {turn.error ? (
+      {turn.handoff ? (
+        <Card style={{ borderColor: colors.primary, borderWidth: 2 }}>
+          <Heading>{turn.handoff.title}</Heading>
+          <Body>{turn.handoff.text}</Body>
+          {turn.handoff.helplines.map((h) => (
+            <Body key={h}>• {h}</Body>
+          ))}
+          {turn.handoff.told ? <Body muted>{turn.handoff.told}</Body> : null}
+        </Card>
+      ) : turn.error ? (
         <ErrorText error={turn.error} />
       ) : (
         <Card>

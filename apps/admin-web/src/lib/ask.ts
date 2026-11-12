@@ -32,6 +32,8 @@ export type AskEvent =
       billedMicro: number;
       model: string | null;
     }
+  /** Distress in the question: the fixed response with the helpline; no answer (architecture §6.2). */
+  | { type: 'handoff'; title: string; text: string; helplines: string[]; told: string }
   | { type: 'error'; code: string; message: string };
 
 export interface AskBody {

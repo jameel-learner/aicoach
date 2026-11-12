@@ -1,4 +1,4 @@
-import { mathToText } from '@aicoach/core';
+import { mathToText, splitCitations } from '@aicoach/core';
 import { Fragment, type ReactNode } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useTheme } from '../lib/theme';
@@ -34,7 +34,7 @@ export function Markdown({
     });
 
   const blocks: ReactNode[] = [];
-  const lines = mathToText(text).split('\n');
+  const lines = splitCitations(mathToText(text)).split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (!line.trim()) continue;

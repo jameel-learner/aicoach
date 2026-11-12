@@ -14,6 +14,7 @@ import { BookPage } from './pages/admin/BookPage';
 import { BooksPage } from './pages/admin/BooksPage';
 import { StrategyPage } from './pages/admin/StrategyPage';
 import { MaterialPage } from './pages/admin/MaterialPage';
+import { SafetyPage } from './pages/admin/SafetyPage';
 import { TaxonomyPage } from './pages/admin/TaxonomyPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { AuthPage } from './pages/AuthPage';
@@ -103,6 +104,7 @@ const adminBookRoute = createRoute({
   path: '/admin/books/$bookId',
   component: BookPage,
 });
+const adminSafetyRoute = createRoute({ ...parent, path: '/admin/safety', component: SafetyPage });
 const creditsRoute = createRoute({ ...parent, path: '/credits', component: CreditsHomePage });
 const walletRoute = createRoute({
   ...parent,
@@ -133,6 +135,7 @@ const routeTree = rootRoute.addChildren([
     adminBookRoute,
     adminStrategyRoute,
     adminMaterialRoute,
+    adminSafetyRoute,
     creditsRoute,
     walletRoute,
     playgroundRoute,

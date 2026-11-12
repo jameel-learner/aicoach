@@ -1,8 +1,9 @@
 import { ROLE_LABELS } from '@aicoach/core';
 import { useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { CreditsCard } from '../../components/CreditsCard';
+import { InterestsCard } from '../../components/InterestsCard';
 import { Body, Button, Card, ErrorText, Heading, Screen, Title } from '../../components/ui';
 import { api, errorMessage, useMe } from '../../lib/api';
 import { authClient } from '../../lib/auth-client';
@@ -63,6 +64,21 @@ export default function Me() {
       </Card>
 
       {(me.user.role === 'student' || me.user.role === 'teacher') && <CreditsCard />}
+
+      {me.user.role === 'student' && (
+        <>
+          <Card>
+            <Heading>My locker</Heading>
+            <Body muted>The cards and memory hooks you made yourself.</Body>
+            <Button
+              title="Open my locker"
+              variant="secondary"
+              onPress={() => router.push('/locker' as Href)}
+            />
+          </Card>
+          <InterestsCard />
+        </>
+      )}
 
       {me.parentContact && (
         <Card>

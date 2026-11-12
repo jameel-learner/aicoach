@@ -24,12 +24,19 @@ export async function askJson<S extends z.ZodTypeAny>(
     maxTokens: number;
     thinking?: 'off' | 'low';
   },
-): Promise<{ value: z.infer<S>; costUsdNano: number; model: string | null }> {
+): Promise<{
+  value: z.infer<S>;
+  costUsdNano: number;
+  /** What the paying wallet was charged (micro-INR), retries included. */
+  billedMicro: number;
+  model: string | null;
+}> {
   const messages: ChatMessage[] = [
     { role: 'system', content: opts.system },
     { role: 'user', content: opts.user },
   ];
   let cost = 0;
+  let billed = 0;
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await runMeteredChat(env, db, {
       task: opts.task,
@@ -41,6 +48,7 @@ export async function askJson<S extends z.ZodTypeAny>(
       messages,
     });
     cost += res.rawUsdNano;
+    billed += res.billedMicro;
     let problem: string;
     try {
       const raw = JSON.parse(
@@ -50,7 +58,8 @@ export async function askJson<S extends z.ZodTypeAny>(
           .replace(/```$/, ''),
       );
       const parsed = opts.schema.safeParse(raw);
-      if (parsed.success) return { value: parsed.data, costUsdNano: cost, model: res.model };
+      if (parsed.success)
+        return { value: parsed.data, costUsdNano: cost, billedMicro: billed, model: res.model };
       const issue = parsed.error.issues[0];
       problem = `${issue?.path.join('.')}: ${issue?.message}`;
     } catch (err) {

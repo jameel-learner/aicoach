@@ -7,10 +7,10 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 3 ✅ signed off 2026-11-11. Next: Phase 4 (session engine & explain/memorise journeys), not started: begins when the user asks |
-| **Last updated** | 2026-11-11 |
-| **Build / tests** | All green: typecheck, lint, format, 81 worker + 13 core tests (`pnpm test`), web build, Android bundle builds |
-| **Blockers** | None |
+| **Current phase** | **Phase 4 🟡 (session engine & explain/memorise journeys), started 2026-11-11.** Built and tested on LOCAL; waiting for the user's walkthrough on the phone ([local.md §3g](environments/local.md#3g-study-sessions-phase-4)). Not committed yet (the user commits) |
+| **Last updated** | 2026-11-12 |
+| **Build / tests** | All green: typecheck (7 packages), lint, format, 94 worker + 28 core + 15 journeys tests (`pnpm test`), web build, Android bundle builds |
+| **Blockers** | None. Open decisions for the user are under *Pending confirmations* |
 | **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (Phase 3 deployed: migrations 0004–0009, books + material package v1 imported; redeploy after the sign-off commit for KaTeX / *Papers found* note / plain-text snippets; codes via `pnpm logs:staging`) |
 
 Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria passed + user sign-off) · ⛔ blocked
@@ -35,7 +35,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 | 1 | LLM gateway, model switching & credits | ✅ (2026-11-09) |
 | 2 | Textbook ingestion & grounded Q&A | ✅ (2026-11-09) |
 | 3 | Board strategy & pre-generated assets | ✅ (2026-11-11) |
-| 4 | Session engine & explain/memorise journeys | ⬜ |
+| 4 | Session engine & explain/memorise journeys | 🟡 built on LOCAL, user walkthrough pending |
 | 5 | Practice, assessment & time management | ⬜ |
 | 6 | Test papers & mock exams | ⬜ |
 | 7 | Teacher journeys & institutional layer | ⬜ |
@@ -199,12 +199,99 @@ Pilot book: NCERT Accountancy Class 12, Parts I & II (`docs/textbooks/accountanc
 - **Needs from the user (before the strategy work):** the official KSEAB 2nd PUC Accountancy blueprint / model papers (PDF) in `docs/textbooks/` (git-ignored)
 - **Phase-end staging steps (planned):** `pnpm deploy:staging` (migrations 0004–0009); import the textbooks the material cites (Books → Import) and then the material (Learning material → Import); no new secrets expected
 
-### Phases 4–9 ⬜
+### Phase 4: Session engine & explanation / memorisation journeys 🟡 (started 2026-11-11)
+
+Design decisions taken at the start are in architecture §9.6 (1–12); as-built notes in §3.7 and §6.2. Walkthrough for the user: [local.md §3g](environments/local.md#3g-study-sessions-phase-4).
+
+**Engine and journeys (pure code)**
+- [x] Graph engine `packages/core/src/journey.ts` (`step`, `findEdge`, `listens`, `validateGraph`, `transitions`), 4 tests
+- [x] New package `packages/journeys`: `explain` (10 steps, 39 edges = 46 transitions) and `memorise` (10 steps, 29 edges = 36 transitions), each with its view builder and outcome; fixed safety wording in `copy.ts`
+- [x] Shared types and rules in core: session views + request schemas, Leitner schedule, mastery labels, interests list (`session.ts`); calculator check (`arithmetic.ts`); `splitCitations` / `stripCitations` (`assets.ts`)
+
+**Server**
+- [x] Migration `0010_phase4_sessions`: `study_sessions`, `session_events`, `mastery`, `card_reviews`, `learner_artefacts`, `learner_interests`, `safety_events` (applied on LOCAL)
+- [x] **SessionAgent** Durable Object (`apps/worker/src/sessions/agent.ts`; binding `SESSION_AGENT`, DO migration `v1`): checkpoint after every step, step numbers against double taps, alarms (idle → paused, 30 days → expired, finished → cleaned up after 7 days)
+- [x] Plans from approved material (`sessions/plan.ts`), model calls (`sessions/tutor.ts`: question / objection with citations, answer marking, hints, teach-back, memory-hook ideas; prompts `session_tutor@1`, `session_check@1`, `session_hint@1`, `session_teach@1`, `mnemonic@1`), records (`sessions/records.ts`)
+- [x] API: `/api/sessions` (home, start/resume, current step, act as SSE or JSON), `/api/learner` (interests, locker, progress), `/api/admin/safety`
+- [x] **Explanation journey:** why it matters (marks, board-paper frequency, real-world hook, prerequisites) → short answer first → deeper layers on request → check question from the question bank → feedback → teach-it-back → own card → close
+- [x] **Challenge mode** ("I disagree"), **show working** (the topic's worked exam answer) with the **calculator check** on every sum of a reply
+- [x] **Hint ladder:** two model hints (stored hints when there are no credits or the call fails), third rung shows the answer; two tries; self-marking
+- [x] **Memorisation journey:** today's cards (due first, then new, 8 per unit) → recall → self-rating → spaced schedule (boxes 1–5: 1, 3, 7, 16, 35 days) → a forgotten card returns once → **memory hook co-creation** → **timed write-out** on paper
+- [x] **Learner-authored cards and memory hooks → locker**; own cards join the chapter's memorise sessions
+- [x] **Declared interests** (chosen on the phone; used for comparisons and memory hooks, never inferred)
+- [x] **Overwhelm → reduce scope** from every working step (button or "too much" wording): smaller plan / same plan / stop
+- [x] **Safety:** rules → guard model (Workers AI) → the tutor model flags; fixed response with Tele-MANAS 14416; alert email to the verified parent, else the institution's POCs; not the parent when the wording is about harm by someone else; one email per 12 hours; the learner's words are never stored. In sessions, in **Ask**, and on the learner's own cards. Admin → **Safety** page
+- [x] **Progress & mastery** (private): per topic *Seen / Got it with help / Got it / Can teach it* (latest result shown); cards reviewed / remembered after 3 days / due; days studied; sessions finished
+- [x] **One-tap resume** and **what to do next** (cards due first, then the topics carrying the most marks)
+
+**Phone**
+- [x] Session screen that draws whatever step the server sends (`app/session/[id].tsx`): blocks, buttons, text boxes, streamed coach text, running clock; *Close (saved)*
+- [x] Home: continue where you stopped, next up, where you are. Chapter screen: *Learn this step by step* per topic, *Practise today's cards*, mastery label per topic. Me: *What I like*, *My locker*. Ask: the fixed safety response
+- [x] Typechecks and bundles for Android. **Not yet run on a device** (the user's walkthrough)
+
+**Web**
+- [x] Ask drawer shows the fixed safety response; Admin → Safety. Study sessions themselves are phone-only
+
+**Tests**
+- [x] `packages/journeys/src/journeys.test.ts`: **every (edge, from-step) pair of both journeys is taken** (the last test of each journey fails if one is missed); structure checks
+- [x] `apps/worker/test/sessions.test.ts` (9 tests): a whole explanation unit with exact charging and records; **a failed call and an evicted Durable Object, resumed from a second sign-in at the same step**; no credits; idle alarm; distress → fixed response, no model call, one parent email, nothing of the message stored; harm by others → institution; third net; a whole memorise unit; privacy (another student / the teacher get 404 / 403)
+- [x] `apps/worker/test/safety-rules.test.ts` + `test/fixtures/safety-redteam.ts`: 87 distress, 21 "too much", 37 ordinary study messages (incl. "death of a partner", "dissolution")
+- [x] **Real smoke test on LOCAL (2026-11-12, real models, platform wallet, ₹0.60):** both journeys end to end; hints didn't give the answer away; an objection was checked against the textbook with page citations; frustration, disagreement and "a partner dies" were not flagged; three distress sentences were handed off (one by the rules, two by the tutor model)
+
+**Exit criteria (architecture §7)**
+- [x] 100% transition coverage on the journey graphs
+- [x] Kill-and-resume (failed call mid-step + Durable Object evicted → resumes on another sign-in at the same step). *On a real phone: in the user's walkthrough (§3g step 7)*
+- [x] Safety red-team set: 100% of the distress cases route to the handoff by the rules alone. **Caveat:** the set was written by Claude together with the rules; the smoke test already found one miss (fixed, added). It proves the rules do what was intended, not that the intention is complete: needs a counsellor's review and cases from outside
+- [ ] User walkthrough on the phone (local.md §3g)
+- [ ] Pilot usability test with 10 students (needs real students: the user to arrange; could move to the pilot itself)
+- [ ] User sign-off
+
+**Not built in Phase 4 (named in the plan, deferred with reasons)**
+- WebSocket streaming → HTTP + SSE per action (9.6-2). Agents SDK → plain Durable Object (9.6-1)
+- Calculator/units as a model *tool* → calculator as a *check* on replies (9.6-6); unit conversion isn't needed for Accountancy
+- The third safety net in **Ask** (see Pending confirmations)
+- A web page for a learner's own progress (phone only); teacher/cohort views are Phase 7
+
+**Phase-end staging steps (planned; nothing done on staging yet)**
+- No new secrets. `pnpm deploy:staging` applies migration `0010` and creates the `SESSION_AGENT` Durable Object (DO migration `v1`); the config was checked with `wrangler deploy --dry-run --env staging`
+- Material is already on staging (package v1): sessions work for chapter 1
+- Test with `pnpm dev:mobile:staging`: local.md §3g steps 2–11 against staging; alert emails appear in `pnpm logs:staging` (EMAIL_PROVIDER=console)
+- If a session step fails with error 1102 (CPU limit) on the free plan: Workers Paid (see Pending confirmations)
+
+### Phase 5: Practice, assessment & time management ⬜ (prepared 2026-11-12, **not started**: starts after the Phase 4 sign-off)
+
+Scope from architecture §7 (to be expanded into tasks when the phase starts):
+- [ ] **Practice journey** (third graph on the Phase 4 engine): timed questions, time budget = marks × minutes per mark, hint ladder, feedback, micro-win
+- [ ] Answer capture: typed, **voice** (task `speech_to_text`), **photo of a handwritten answer** (task `vision_ocr`)
+- [ ] **Accountancy answer grids** (journal, ledger / T-account, capital accounts, balance sheet) with code checks before any model grading (Dr = Cr, totals tally, c/d = b/d, ratio arithmetic)
+- [ ] **Rubric grader** on the board marking scheme (task `grading`), verifier pass on low-confidence grades, teacher override
+- [ ] Writing-speed training (words per minute, minutes per mark against the exam target, trends); content + time scorecard
+- [ ] Chapter boss sets (mastery-gated), weightage-driven scheduler
+- **Exit:** grader within ±1 mark of teacher marks on ≥ 80% of a 200-answer set; accountancy validators 100% on fixtures; STT word error rate measured on an Indian-English set; timed-session accuracy tests
+
+**Needed from the user before or early in Phase 5**
+- **Teacher-marked answers** (the exit test needs about 200: question, the student's answer as text or photo, marks given, ideally the marks per step). Even 30–50 to start lets the grader be tuned; without any, grading can be built but not measured
+- **Photos of handwritten answers** (a few dozen, different handwriting) for the reading step; and a few **voice recordings** of students answering in Indian English for the speech step
+- **Material beyond chapter 1:** practice needs question sets for more chapters. Decide whether to generate chapters 2–13 with Gemini now (≈ US$7 for everything, regenerated later with Opus/Sonnet per 9.5-4) or keep building on chapter 1
+- **Workers Paid (US$5/month):** grading photos and audio will need more CPU and bigger requests than the free plan allows; expected to be required in this phase
+- Carried from Phase 4: the open items under *Pending confirmations*
+
+### Phases 6–9 ⬜
 Checklists are expanded from architecture §7 when the phase starts.
 
 ---
 
 ## Known issues / bugs
+
+- **Phase 4, safety (before the pilot):** the distress rules, the fixed response and the two alert emails were written by Claude and need a **counsellor's review**; the romanised Hindi and Kannada phrases need a native speaker. The red-team set is self-written (see the Phase 4 exit note). Self-study learners without a confirmed parent have nobody to alert: such triggers show as *Nobody to tell* on Admin → Safety and need a person to follow up.
+- **Phase 4, Ask:** distress in *Ask your textbook* is caught by the rules and the guard model only (not the third net, see Pending confirmations). The guard model missed a euphemism in the smoke test that the rules now cover.
+- **Phase 4, phone:** the session screen, Home, locker and interests typecheck and bundle but were **not run on a device** by Claude.
+- **Phase 4, challenge mode wording:** in the smoke test, when the student's objection was wrong the coach opened with "You are right that my previous answer was not complete" before correcting it with the textbook. The facts were right; the opening is soft. Tune `session_tutor` after the walkthrough if it recurs.
+- **Phase 4, teach-back judge is strict:** a reasonable explanation got 5 of 8 points and "good: false" (so no mastery lift). Watch in the walkthrough; loosen `session_teach` if students find it discouraging.
+- **Phase 4, costs seen in the smoke test (Gemini 2.5 Flash, at cost):** a question or objection ≈ ₹0.04–0.07, a hint ≈ ₹0.015, marking an answer ≈ ₹0.02, teach-back ≈ ₹0.05, memory-hook ideas ≈ ₹0.04; a full explanation session ≈ ₹0.20–0.25 before the fee. Reading, cards, MCQ marking and self-marking are free.
+- **Phase 4, LOCAL data from the smoke test:** account `smoke-admin@aicoach.local` (now role *teacher*, signed out, password not kept), its 6 study sessions, 4 safety events (*Nobody to tell*) and ₹0.60 of platform-wallet usage. Harmless; the usage rows are real spend and stay.
+- Eval runs saved within the same millisecond came back in either order (`/api/admin/evals/runs`), which made one `ask.test.ts` assertion fail now and then. Fixed 2026-11-12 (tie broken by rowid).
+- Notes and cards sometimes cite two pages in one bracket (`[S1, S6]`), which the phone and web showed as raw text. Fixed 2026-11-12 for display and for citation checking (`splitCitations`); stored material is unchanged.
 
 - Eval p1-18 ("What does retirement of a partner mean?") cites the retirement chapter (p. 117) instead of the definition on p. 59: the p. 59 chunk mixes admission, change in profit ratio and retirement (definition at its end). Keyword search ranks it first; it loses after reranking/answering. Fix idea: split chunks at inline sub-headings ("Retirement of an existing partner: …") in the next book version (re-embed + re-import on staging). p1-20 (amounts payable to a retiring partner) was answered from the disposal pages (135–142) and scored 0 once; watch it in the next run (2026-11-11)
 - Mobile bundle: after `npx expo install` (or with `--clear`) one cold Metro build failed with "Unable to resolve @aicoach/core" (pnpm workspace link on Windows); the next runs bundled fine (2026-11-11). If it happens, run the command again.
@@ -219,6 +306,11 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Scheduled jobs don't run by themselves under `wrangler dev`: trigger the hourly job (holds + reconciliation) with `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`.
 
 ## Pending confirmations
+
+- **Phase 4 design decisions taken by Claude (architecture §9.6-1…12): please confirm or change.** The ones most worth a look: plain Durable Object instead of the Agents SDK (1); HTTP + SSE instead of a WebSocket (2); the calculator as a check instead of a model tool (6); students only, teachers in Phase 7 (10); **the parent is not emailed when the learner says someone is hurting them, the institution is** (12); the learner's message is never stored, only the rule that fired (5).
+- **Third safety net in Ask (9.6-11):** adding the "flag distress instead of answering" rule to the Ask prompt makes it `tutor_answer@2`. Effect: saved answers of `@1` stop being reused (answered fresh on the next ask, a few paise each) and the evals should be re-run (≈ the cost of one eval run). Recommended: yes, before the pilot. Not done without your OK because it changes the eval baseline.
+- **Pilot usability test with 10 students** is a Phase 4 exit criterion that needs real students. Either arrange it now, or sign off Phase 4 without it and make it part of the pilot.
+- **Counsellor review** of the safety wording and rules: who, and when (before real students).
 
 - *(Resolved 2026-11-09, decision 9.4-1: one shared content store for LOCAL + STAGING.)*
 - *(Resolved 2026-11-09: ingestion cost measured (≈ US$0.0022/page, mistral-ocr) and approved by the user; Part I cost ≈ US$0.46.)*
@@ -328,3 +420,12 @@ Checklists are expanded from architecture §7 when the phase starts.
 - 2026-11-11: committed + pushed `8400be1`; user ran `pnpm deploy:staging` (migrations 0004–0009 applied, checked), imported the textbooks and material package v1 on staging (the strategy comes with it). *Papers found* is empty on an imported strategy by design (`board_items` stay local); the card now says so instead of an empty table (web only, needs a redeploy). CI result not checked (`gh` not installed).
 - 2026-11-11: user confirmed the strategy corrections were applied. Built LaTeX display (9.5-9), 14 typed golden questions + per-type eval report (9.5-10), re-ran the evals: 67 of 69 questions scored (2 temporary provider errors; both passed on a re-run): **citation 89.6%** (target ≥ 90%), **correctness 94.8%** (target ≥ 85%). By type: concept 92% / 95%, journal 80% / 90%, table 50% / 88% (2 of the misses cited a page that also has the answer: golden widened afterwards), figure 100% / 100%, formula 100% / 100%, not-in-book 100%. Created the LOCAL eval Admin `evals-admin@aicoach.local`; removed my two debug eval runs (1 and 8 questions) from `eval_runs`. Recorded decisions 9.5-8 … 9.5-11 and updated architecture §3.3, §3.4, §3.5, §7. 81 worker + 13 core tests green; typecheck, lint, format, web build, Android bundle pass. Not committed yet. Next: user's phone test on staging, commit + push + redeploy staging (web: KaTeX, *Papers found* note), sign-off.
 - 2026-11-11: **Phase 3 signed off by the user.** Committed + pushed the LaTeX / evals / docs work. Carried forward: p1-18 citation miss (re-chunk in the next book version), per-model thinking setting and the Opus/Sonnet regeneration of all material before production (9.5-4), chapters 2–13 generated in that regeneration. Next: staging redeploy (user, `pnpm deploy:staging`), then Phase 4 when the user asks.
+
+### 2026-11-11 / 12 (Phase 4 start: session engine, both journeys, safety)
+- Read progress.md, architecture §3.7 / §6 / §7 and the spec; recorded the build decisions as architecture §9.6 (1–10) before writing code.
+- Built (see the Phase 4 checklist): graph engine in core, `packages/journeys` (explain + memorise with views and outcomes), migration 0010 (applied on LOCAL), the SessionAgent Durable Object, plans from approved material, tutor calls, records, `/api/sessions`, `/api/learner`, `/api/admin/safety`, safety (rules, guard model, handoff emails) in sessions, Ask and own cards; phone: session screen, Home, chapter entry points, interests, locker, Ask handoff; web: Ask handoff, Admin → Safety.
+- Found by tests: a question asked at the short answer vanished from the screen after *Go deeper* (the conversation is now kept for the whole answer step); "i wanna die" wasn't matched (rule fixed).
+- **Real smoke test on LOCAL** (throwaway LOCAL admin on the platform wallet, ₹0.60): both journeys worked end to end with Gemini 2.5 Flash. It found: (1) **a distress euphemism passed the rules and the guard model and got a normal reply** → added to the red-team set and the rules, and added a third net (the tutor model flags, decision 9.6-11); re-tested with the real models: caught, and no false flags on frustration / disagreement / "a partner dies"; (2) combined citations `[S1, S6]` shown raw → `splitCitations`; card text showed citation markers → stripped on cards; (3) the guard model's real output format confirmed (`unsafe\nS11`, 250–700 ms).
+- Also fixed: an older flaky assertion in `ask.test.ts` (eval runs saved in the same millisecond). `cleanup-test:local` now also removes test users' session data.
+- Checks at the end: typecheck (7 packages), lint, format, **94 worker + 28 core + 15 journeys tests**, web build, Android bundle: all green. Staging config validated with a dry run only; **nothing was deployed or changed on staging**.
+- **Not committed** (the user commits). **Next:** the user's walkthrough on the phone (local.md §3g: `pnpm db:migrate:local` is already applied; restart `pnpm dev:worker`), then fixes from it; decisions under *Pending confirmations*; at phase end: commit + push, CI, `pnpm deploy:staging`, staging test, sign-off.

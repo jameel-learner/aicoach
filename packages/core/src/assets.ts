@@ -166,6 +166,23 @@ export interface AssetSource {
   section: string | null;
 }
 
+/**
+ * Models sometimes cite several excerpts in one bracket ("[S1, S6]"). Everything that reads
+ * citations expects one marker each, so this rewrites it to "[S1][S6]".
+ */
+export function splitCitations(text: string): string {
+  return text.replace(/\[(S\d+(?:\s*[,;&]\s*S?\d+)+)\]/g, (_, list: string) =>
+    (list.match(/\d+/g) ?? []).map((n) => `[S${n}]`).join(''),
+  );
+}
+
+/** Text without its citation markers (for a recall card, where a page badge would be noise). */
+export const stripCitations = (text: string) =>
+  text
+    .replace(/\s*\[S\d+(?:\s*[,;&]\s*S?\d+)*\]/g, '')
+    .replace(/\s+([.,;:])/g, '$1')
+    .trim();
+
 /** "note:3:gaining-ratio:6" (kind, chapter, topic slug, marks): stable across regenerations. */
 export function slotKey(kind: AssetKind, chapter: number, topic: string, marks: number) {
   const slug = topic

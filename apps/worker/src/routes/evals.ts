@@ -1,6 +1,6 @@
 import { evalJudgeSchema, evalRunSchema } from '@aicoach/core';
 import { evalRuns } from '@aicoach/db';
-import { desc } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { platformWallet } from '../credits/wallets';
 import type { AppBindings } from '../env';
@@ -86,7 +86,8 @@ evalRoutes.get('/runs', async (c) => {
       createdAt: evalRuns.createdAt,
     })
     .from(evalRuns)
-    .orderBy(desc(evalRuns.createdAt))
+    // rowid breaks the tie when two runs are saved within the same millisecond.
+    .orderBy(desc(evalRuns.createdAt), sql`rowid desc`)
     .limit(200);
   const latest = new Map<string, (typeof rows)[number]>();
   for (const r of rows) if (!latest.has(r.model)) latest.set(r.model, r);

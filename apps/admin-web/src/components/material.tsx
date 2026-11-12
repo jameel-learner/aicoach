@@ -1,5 +1,6 @@
 import {
   RUBRIC,
+  splitCitations,
   type AssetSource,
   type CardsDraft,
   type ConceptNode,
@@ -53,7 +54,7 @@ export function AssetBody({
 
 /** [S2] → "(p. 65)" from the note's sources. */
 const withPages = (md: string, sources: AssetSource[]) =>
-  md.replace(/\[S(\d+)\]/g, (_, n: string) => {
+  splitCitations(md).replace(/\[S(\d+)\]/g, (_, n: string) => {
     const s = sources.find((x) => x.n === Number(n));
     return s ? ` *(p. ${s.page})*` : '';
   });

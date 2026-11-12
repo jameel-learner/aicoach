@@ -26,6 +26,13 @@ export type DoneEvent = {
   billedMicro: number;
   model: string | null;
 };
+export interface HandoffEvent {
+  type: 'handoff';
+  title: string;
+  text: string;
+  helplines: string[];
+  told: string;
+}
 export type AskEvent =
   | {
       type: 'meta';
@@ -37,6 +44,8 @@ export type AskEvent =
     }
   | { type: 'delta'; text: string }
   | DoneEvent
+  /** Distress in the question: the fixed response with the helpline; no answer (architecture §6.2). */
+  | HandoffEvent
   | { type: 'error'; code: string; message: string };
 
 export interface HistoryTurn {

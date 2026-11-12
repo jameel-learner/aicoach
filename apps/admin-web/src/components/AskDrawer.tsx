@@ -21,6 +21,7 @@ interface Turn {
   answering?: string;
   text: string;
   done?: Extract<AskEvent, { type: 'done' }>;
+  handoff?: Extract<AskEvent, { type: 'handoff' }>;
   error?: string;
   pending: boolean;
 }
@@ -87,6 +88,7 @@ export function AskDrawer({ me }: { me: MeResponse }) {
           if (e.type === 'delta') update(id, (t) => ({ ...t, text: t.text + e.text }));
           if (e.type === 'done')
             update(id, (t) => ({ ...t, done: e, text: e.answer, pending: false }));
+          if (e.type === 'handoff') update(id, (t) => ({ ...t, handoff: e, pending: false }));
           if (e.type === 'error') update(id, (t) => ({ ...t, error: e.message, pending: false }));
         },
         abort.current.signal,
@@ -249,7 +251,18 @@ function TurnView({
           Answering: <span className="italic">{turn.answering}</span>
         </p>
       )}
-      {turn.error ? (
+      {turn.handoff ? (
+        <div role="alert" className="rounded-lg border-2 border-primary px-3 py-3 text-[15px]">
+          <p className="mb-1 font-semibold">{turn.handoff.title}</p>
+          <p>{turn.handoff.text}</p>
+          <ul className="my-2 list-disc pl-5">
+            {turn.handoff.helplines.map((h) => (
+              <li key={h}>{h}</li>
+            ))}
+          </ul>
+          {turn.handoff.told && <p className="text-sm text-muted">{turn.handoff.told}</p>}
+        </div>
+      ) : turn.error ? (
         <p role="alert" className="text-danger">
           {turn.error}
         </p>

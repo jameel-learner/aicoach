@@ -209,6 +209,25 @@ Notes per topic and marks level from the **approved** strategy (3e). Development
 11. **Share with other environments** (top of Learning material): **Publish approved material** puts the approved strategy and every approved item in the shared store as a new version (no model calls). Staging imports it at phase end.
 12. When the chapter looks good, generate the rest (untick all = all chapters). A stopped run: **Continue** (notes already written aren't paid again).
 
+## 3g. Study sessions (Phase 4)
+
+Short study units on the phone, built from the **approved** material (3f): *Understand* (one topic) and *Memorise* (a chapter's cards). You need a **student** who is enrolled in the subject and has a few rupees of credits (about ₹0.25 for a full session with questions; reading, cards and self-marking are free).
+
+1. `pnpm db:migrate:local` (migration `0010_phase4_sessions`), then restart Terminal 1 (`pnpm dev:worker`): it now also runs the session engine (a Durable Object, stored under `.wrangler\state` like the database).
+2. **Phone** (`pnpm dev:mobile`, signed in as the student) → **Me** → *What I like*: pick two or three interests.
+3. **Home** shows *Next up*: cards that are due and the topics that carry the most marks. Tap a topic.
+4. **Understand:** *Why it matters* → **Start** → the short answer. Try each of: **Go deeper**, **Show the working**, type a question → **Ask**, type an objection → **I disagree** (each reply shows page numbers; a wrong sum in a reply is flagged).
+5. **Got it. Check me** → **Give me a hint** → answer wrongly once (you get a pointer, not the answer) → answer again, or **Show me the answer** and mark yourself.
+6. **Explain it in my own words** → **Make my own card** → **Finish**. The last screen says what you did and where you are on the topic (*Seen / Got it with help / Got it / Can teach it*).
+7. **Stop and resume:** start another topic, go two steps in, then close the app completely (swipe it away). Open it again: Home shows **Continue where you stopped**, at the same step. If you have a second phone, sign in there: it continues there too.
+8. **Memorise:** Learn → Chapters → chapter 1 → **Cards** → **Practise today's cards**. For each card: say the answer, **Show the answer**, then *I knew it / Almost / Forgot*. On one card tap **Make a memory hook** → **Give me ideas** (they use your interests) → pick or write one. A card you forgot comes back once at the end. Then the **timed write-out**: write the answer on paper, stop the clock, compare.
+9. **Too much:** in any session tap **This is too much today** (or type "this is too much"): you are offered a smaller plan, the same plan, or stopping. No pep talk.
+10. **Me → Open my locker:** your own card and memory hook are there; your card also comes up in the chapter's next memorise session.
+11. **Safety (please test it once, it sends an email):** in a session type a distress sentence, e.g. *I don't want to live anymore*. Expected: the session stops with a fixed message and the Tele-MANAS number (14416), no AI reply. The alert email appears in Terminal 1: to the parent if the consent link was confirmed, otherwise to the institution's coordinator. **Web → Admin → Safety** lists the trigger (never the text). The same sentence in *Ask your textbook* gives the same fixed message.
+12. **Web → Credits** (as the student's teacher, or Admin → Wallets): the session's AI replies appear in the student's usage as *Tutor chat*, in ₹.
+
+What is **not** on the web: study sessions are for students on the phone. An Admin can try the API directly with `offeringId` (platform wallet), which is how the smoke test was run.
+
 ## 4. After pulling new code
 
 When a phase adds dependencies or database changes:

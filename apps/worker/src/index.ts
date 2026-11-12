@@ -24,6 +24,8 @@ import { parentConsentRoutes } from './routes/parent-consent';
 import { teacherRoutes } from './routes/teacher';
 import { reviewRoutes } from './routes/review';
 import { learnerMaterialRoutes } from './routes/learn-material';
+import { sessionRoutes } from './routes/sessions';
+import { learnerRoutes, safetyAdminRoutes } from './routes/learner';
 
 export function createApp() {
   const app = new Hono<AppBindings>().basePath('/api');
@@ -69,12 +71,15 @@ export function createApp() {
   app.route('/admin/saved-answers', savedAnswerRoutes);
   app.route('/admin/evals', evalRoutes);
   app.route('/admin/credits', adminCreditRoutes);
+  app.route('/admin/safety', safetyAdminRoutes);
   app.route('/admin', adminRoutes);
   app.route('/credits', creditRoutes);
   app.route('/ai', aiRoutes);
   app.route('/ask', askRoutes);
   app.route('/review', reviewRoutes);
   app.route('/material', learnerMaterialRoutes);
+  app.route('/sessions', sessionRoutes);
+  app.route('/learner', learnerRoutes);
   app.route('/institutions', institutionRoutes);
   app.route('/teacher', teacherRoutes);
   app.route('/parent-consent', parentConsentRoutes);
@@ -113,3 +118,5 @@ export default {
 export { IngestBookWorkflow } from './content/workflow';
 export { CompileStrategyWorkflow } from './strategy/workflow';
 export { GenerateAssetsWorkflow } from './assets/workflow';
+// Durable Object classes too: one SessionAgent per study session (architecture §3.7).
+export { SessionAgent } from './sessions/agent';

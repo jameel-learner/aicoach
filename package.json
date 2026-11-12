@@ -10,6 +10,7 @@
     "dev:web": "pnpm --filter @aicoach/admin-web dev",
     "dev:mobile": "pnpm --filter @aicoach/mobile start",
     "dev:mobile:staging": "pnpm --filter @aicoach/mobile start:staging",
+    "build:apk:staging": "pnpm --filter @aicoach/mobile build:apk:staging",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "eslint . --max-warnings=0",

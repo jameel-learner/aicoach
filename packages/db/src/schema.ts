@@ -918,3 +918,172 @@ export const assetReviews = sqliteTable(
     index('asset_reviews_asset_idx').on(t.assetId),
   ],
 );
+
+// ---------------------------------------------------------------- Phase 4: study sessions
+
+/**
+ * Index of study sessions (architecture §3.7, decision 9.6-3). The session's state (its checkpoint)
+ * lives in the SessionAgent Durable Object named by `id`; this row is what lists, one-tap resume
+ * and progress read. Named study_sessions because `session` is the sign-in session table.
+ */
+export const studySessions = sqliteTable(
+  'study_sessions',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    offeringId: text('offering_id')
+      .notNull()
+      .references(() => subjectOfferings.id),
+    enrolmentId: text('enrolment_id'),
+    journey: text('journey', { enum: ['explain', 'memorise'] }).notNull(),
+    graphVersion: integer('graph_version').notNull(),
+    chapter: integer('chapter').notNull(),
+    /** Explanation sessions: the topic. Empty for a chapter's cards. */
+    topic: text('topic').notNull().default(''),
+    title: text('title').notNull(),
+    status: text('status', {
+      enum: ['active', 'paused', 'done', 'stopped', 'handoff', 'expired'],
+    })
+      .notNull()
+      .default('active'),
+    node: text('node').notNull(),
+    seq: integer('seq').notNull().default(0),
+    /** What happened (ExplainOutcome / MemoriseOutcome), set when the session ends. */
+    outcome: text('outcome', { mode: 'json' }).$type<unknown>(),
+    billedMicro: integer('billed_micro').notNull().default(0),
+    startedAt: createdAt(),
+    updatedAt: updatedAt(),
+    finishedAt: integer('finished_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    index('study_sessions_user_idx').on(t.userId, t.offeringId, t.status, t.updatedAt),
+    index('study_sessions_topic_idx').on(t.userId, t.offeringId, t.journey, t.chapter, t.topic),
+  ],
+);
+
+/** One row per step of a session: which edge was taken (no learner text is stored here). */
+export const sessionEvents = sqliteTable(
+  'session_events',
+  {
+    id: id(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => studySessions.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    edge: text('edge').notNull(),
+    fromNode: text('from_node').notNull(),
+    toNode: text('to_node').notNull(),
+    billedMicro: integer('billed_micro').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('session_events_seq_uq').on(t.sessionId, t.seq)],
+);
+
+/** Where a learner is on a topic (decision 9.6-9). Private to the learner. */
+export const mastery = sqliteTable(
+  'mastery',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    offeringId: text('offering_id')
+      .notNull()
+      .references(() => subjectOfferings.id),
+    chapter: integer('chapter').notNull(),
+    topic: text('topic').notNull(),
+    /** Latest result: 0 not started · 1 seen · 2 got it with help · 3 got it · 4 can teach it. */
+    level: integer('level').notNull().default(0),
+    best: integer('best').notNull().default(0),
+    sessions: integer('sessions').notNull().default(0),
+    lastSessionId: text('last_session_id'),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.offeringId, t.chapter, t.topic] })],
+);
+
+/** Spaced recall state of one card for one learner (Leitner boxes, decision 9.6-7). */
+export const cardReviews = sqliteTable(
+  'card_reviews',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    offeringId: text('offering_id')
+      .notNull()
+      .references(() => subjectOfferings.id),
+    /** `<cards slot>#<hash of the front>` for platform cards, `own:<artefact id>` for the learner's. */
+    cardKey: text('card_key').notNull(),
+    chapter: integer('chapter').notNull(),
+    box: integer('box').notNull(),
+    dueAt: integer('due_at', { mode: 'timestamp_ms' }).notNull(),
+    reviews: integer('reviews').notNull().default(0),
+    lapses: integer('lapses').notNull().default(0),
+    lastRating: text('last_rating', { enum: ['got', 'almost', 'forgot'] }).notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.offeringId, t.cardKey] }),
+    index('card_reviews_due_idx').on(t.userId, t.offeringId, t.chapter, t.dueAt),
+  ],
+);
+
+/** The learner's own cards and memory hooks: their locker (spec 5.5.10). */
+export const learnerArtefacts = sqliteTable(
+  'learner_artefacts',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    offeringId: text('offering_id')
+      .notNull()
+      .references(() => subjectOfferings.id),
+    kind: text('kind', { enum: ['card', 'mnemonic'] }).notNull(),
+    chapter: integer('chapter').notNull(),
+    topic: text('topic').notNull().default(''),
+    /** Memory hooks: the card they belong to. */
+    cardKey: text('card_key'),
+    /** card: { front, back } · mnemonic: { text, for } (for = the card's front). */
+    content: text('content', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+    sessionId: text('session_id'),
+    status: text('status', { enum: ['active', 'removed'] })
+      .notNull()
+      .default('active'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('learner_artefacts_user_idx').on(t.userId, t.offeringId, t.kind, t.chapter)],
+);
+
+/** Declared interests (spec 5.5.11): chosen by the learner, never inferred. */
+export const learnerInterests = sqliteTable('learner_interests', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  interests: text('interests', { mode: 'json' }).$type<string[]>().notNull(),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * Every distress trigger (architecture §6.2, decision 9.6-5). The learner's message is NOT stored:
+ * only which rule (or the guard model) fired and who was told.
+ */
+export const safetyEvents = sqliteTable(
+  'safety_events',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    source: text('source', { enum: ['session', 'ask', 'artefact'] }).notNull(),
+    sessionId: text('session_id'),
+    detector: text('detector', { enum: ['rules', 'model'] }).notNull(),
+    rule: text('rule').notNull(),
+    /** parent / poc = an alert email went out; suppressed = one was sent in the last 12 hours. */
+    notified: text('notified', { enum: ['parent', 'poc', 'none', 'suppressed'] }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('safety_events_user_idx').on(t.userId, t.createdAt)],
+);
