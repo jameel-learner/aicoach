@@ -7,11 +7,11 @@
 
 | | |
 |---|---|
-| **Current phase** | **Phase 4 🟡 (session engine & explain/memorise journeys), started 2026-11-11.** Built and tested on LOCAL; waiting for the user's walkthrough on the phone ([local.md §3g](environments/local.md#3g-study-sessions-phase-4)). Not committed yet (the user commits) |
+| **Current phase** | **Phase 4 🟡 (session engine & explain/memorise journeys): built, committed (`7ff00e7`) and deployed to STAGING on 2026-11-12.** Everything in the design is built; what remains are the exit steps that need people: the test on real phones (the staging APK is for that), the 10-student usability test, and the user's sign-off. Phase 5 is prepared but **not started** |
 | **Last updated** | 2026-11-12 |
-| **Build / tests** | All green: typecheck (7 packages), lint, format, 94 worker + 28 core + 15 journeys tests (`pnpm test`), web build, Android bundle builds |
+| **Build / tests** | All green: typecheck (7 packages), lint, format, 95 worker + 28 core + 15 journeys tests (`pnpm test`), web build, Android bundle builds |
 | **Blockers** | None. Open decisions for the user are under *Pending confirmations* |
-| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (Phase 3 deployed: migrations 0004–0009, books + material package v1 imported; redeploy after the sign-off commit for KaTeX / *Papers found* note / plain-text snippets; codes via `pnpm logs:staging`) |
+| **Staging** | https://aicoach-api-staging.jameel-outskill.workers.dev (**Phase 4 deployed 2026-11-12**: migration 0010, `SESSION_AGENT` Durable Object, version `66c8988b`; material package v1 = chapter 1; codes via `pnpm logs:staging`). Android APK for staging: `pnpm build:apk:staging` ([staging.md §3e](environments/staging.md#3e-the-app-as-an-apk-file-for-students-outside-your-wi-fi)) |
 
 Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria passed + user sign-off) · ⛔ blocked
 
@@ -35,7 +35,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done (exit criteria pa
 | 1 | LLM gateway, model switching & credits | ✅ (2026-11-09) |
 | 2 | Textbook ingestion & grounded Q&A | ✅ (2026-11-09) |
 | 3 | Board strategy & pre-generated assets | ✅ (2026-11-11) |
-| 4 | Session engine & explain/memorise journeys | 🟡 built on LOCAL, user walkthrough pending |
+| 4 | Session engine & explain/memorise journeys | 🟡 built + on staging (2026-11-12); student test and sign-off pending |
 | 5 | Practice, assessment & time management | ⬜ |
 | 6 | Test papers & mock exams | ⬜ |
 | 7 | Teacher journeys & institutional layer | ⬜ |
@@ -242,7 +242,7 @@ Design decisions taken at the start are in architecture §9.6 (1–12); as-built
 - [x] 100% transition coverage on the journey graphs
 - [x] Kill-and-resume (failed call mid-step + Durable Object evicted → resumes on another sign-in at the same step). *On a real phone: in the user's walkthrough (§3g step 7)*
 - [x] Safety red-team set: 100% of the distress cases route to the handoff by the rules alone. **Caveat:** the set was written by Claude together with the rules; the smoke test already found one miss (fixed, added). It proves the rules do what was intended, not that the intention is complete: needs a counsellor's review and cases from outside
-- [ ] User walkthrough on the phone (local.md §3g)
+- [ ] User walkthrough on a real phone (local.md §3g, or on staging with the APK: staging.md §3d–3e)
 - [ ] Pilot usability test with 10 students (needs real students: the user to arrange; could move to the pilot itself)
 - [ ] User sign-off
 
@@ -252,10 +252,11 @@ Design decisions taken at the start are in architecture §9.6 (1–12); as-built
 - The third safety net in **Ask** (see Pending confirmations)
 - A web page for a learner's own progress (phone only); teacher/cohort views are Phase 7
 
-**Phase-end staging steps (planned; nothing done on staging yet)**
-- No new secrets. `pnpm deploy:staging` applies migration `0010` and creates the `SESSION_AGENT` Durable Object (DO migration `v1`); the config was checked with `wrangler deploy --dry-run --env staging`
-- Material is already on staging (package v1): sessions work for chapter 1
-- Test with `pnpm dev:mobile:staging`: local.md §3g steps 2–11 against staging; alert emails appear in `pnpm logs:staging` (EMAIL_PROVIDER=console)
+**Phase-end staging steps (done 2026-11-12 on the user's request, before the sign-off, so students can test)**
+- [x] No new secrets. `pnpm deploy:staging` applied migration `0010` and created the `SESSION_AGENT` Durable Object (version `66c8988b`). Checked: health `staging`, the new routes answer 401 without sign-in, the 7 new tables exist, material is there (25 approved items, 1 approved strategy)
+- [x] Material is already on staging (package v1): sessions work for chapter 1
+- [x] **Android APK for staging** set up: Expo project `@jameellearner/aicoach`, profile `staging-apk`, keystore kept by Expo, first build started 2026-11-12 (staging.md §3e)
+- [ ] User + students: local.md §3g steps 2–11 against staging (staging.md §3d). **Staging has no real email**: sign-in codes and consent links only appear in `pnpm logs:staging`, and safety alerts reach nobody (Admin → Safety shows *Nobody to tell*: check it daily)
 - If a session step fails with error 1102 (CPU limit) on the free plan: Workers Paid (see Pending confirmations)
 
 ### Phase 5: Practice, assessment & time management ⬜ (prepared 2026-11-12, **not started**: starts after the Phase 4 sign-off)
@@ -306,6 +307,8 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Scheduled jobs don't run by themselves under `wrangler dev`: trigger the hourly job (holds + reconciliation) with `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`.
 
 ## Pending confirmations
+
+- **Before students use the staging app (2026-11-12):** (1) **email**: staging only logs emails, so a student can't receive a sign-in code, and a parent can't receive the consent link or an alert. For a few testers, read each code from `pnpm logs:staging` and pass it on; for more, verify a sender domain in Resend and switch `EMAIL_PROVIDER` to `resend` (staging.md §5). (2) **Safety follow-up is manual** until then: look at Admin → Safety every day. (3) These are real minors: the DPDP consent flow needs the parent email to work, and the safety wording still needs a counsellor's review. (4) Workers Paid if error 1102 shows up.
 
 - **Phase 4 design decisions taken by Claude (architecture §9.6-1…12): please confirm or change.** The ones most worth a look: plain Durable Object instead of the Agents SDK (1); HTTP + SSE instead of a WebSocket (2); the calculator as a check instead of a model tool (6); students only, teachers in Phase 7 (10); **the parent is not emailed when the learner says someone is hurting them, the institution is** (12); the learner's message is never stored, only the rule that fired (5).
 - **Third safety net in Ask (9.6-11):** adding the "flag distress instead of answering" rule to the Ask prompt makes it `tutor_answer@2`. Effect: saved answers of `@1` stop being reused (answered fresh on the next ask, a few paise each) and the evals should be re-run (≈ the cost of one eval run). Recommended: yes, before the pilot. Not done without your OK because it changes the eval baseline.
@@ -429,3 +432,12 @@ Checklists are expanded from architecture §7 when the phase starts.
 - Also fixed: an older flaky assertion in `ask.test.ts` (eval runs saved in the same millisecond). `cleanup-test:local` now also removes test users' session data.
 - Checks at the end: typecheck (7 packages), lint, format, **94 worker + 28 core + 15 journeys tests**, web build, Android bundle: all green. Staging config validated with a dry run only; **nothing was deployed or changed on staging**.
 - **Not committed** (the user commits). **Next:** the user's walkthrough on the phone (local.md §3g: `pnpm db:migrate:local` is already applied; restart `pnpm dev:worker`), then fixes from it; decisions under *Pending confirmations*; at phase end: commit + push, CI, `pnpm deploy:staging`, staging test, sign-off.
+
+### 2026-11-12 (Phase 4: commit, staging, APK; Phase 5 prepared)
+- User asked to move Phase 4 to staging, build an APK for students outside the Wi-Fi, commit, and get ready for the next phase.
+- Before staging: found that with staging's log-only email a distressed student would have been told "we've let your parent know" although nobody receives anything. Fixed: a notifier that only logs (`delivers = false`, the console channel outside LOCAL) is not reported as "someone was informed"; the trigger shows as *Nobody to tell* for Admin to follow up. Test added (95 worker tests).
+- Committed `7ff00e7` (68 files). **The push to GitHub did not finish from Claude's side** (it waited on a GitHub sign-in): run `git push origin main` if `git status` still says *ahead*. CI therefore not seen.
+- **Staging deployed** (`pnpm deploy:staging`, version `66c8988b`): migration 0010 applied, Durable Object created; checked health, routes, tables and material (read-only checks; no accounts or data were created or changed on staging).
+- **APK:** this PC has no Java / Android SDK, so the build runs on Expo's service (EAS) under the logged-in account `jameellearner`: project `@jameellearner/aicoach` created, keystore generated and kept by Expo, profile `staging-apk` (talks to staging), first build `2882a80e` started; `pnpm build:apk:staging` repeats it. **Not installed or run on a phone by Claude.**
+- **Is Phase 4 finished?** Everything in the Phase 4 design is built, tested and on staging. Not done: the run on real phones, the 10-student usability test and the sign-off. So Phase 4 stays 🟡 and Phase 5 was only prepared (checklist + what is needed from the user), not started.
+- Next: push (if still pending); install the APK and walk through staging.md §3d; decide the items under *Pending confirmations*; sign off Phase 4; then Phase 5.

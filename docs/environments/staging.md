@@ -176,7 +176,8 @@ cd E:\repository\aicoach
 pnpm build:apk:staging
 ```
 
-- The **first time** it asks to create the project on your Expo account and to **generate an Android keystore**: answer **yes** to both (Expo keeps the keystore; later builds reuse it, so updates install over the old app).
+- Set up on 2026-11-12: Expo project `@jameellearner/aicoach` (https://expo.dev/accounts/jameellearner/projects/aicoach; its id is in `apps\mobile\app.json`) and an **Android keystore kept by Expo**. Later builds reuse that keystore, so a new APK installs over the old one. All builds and their download links are listed on that project page.
+- If it asks you to log in: `npx eas-cli login` (the Expo account `jameellearner`).
 - It uploads the code (git-ignored files such as textbooks and `.dev.vars` are not uploaded), builds for 10 to 20 minutes, and prints a link to the **.apk**. Share that link or the file.
 - On the phone: open the link → download → *Install* (Android asks once to allow installs from the browser or file manager). The app shows **"STAGING server"** on the sign-in screen.
 - A new build is needed after changes to the phone app (not after server-only changes: those reach the app through `pnpm deploy:staging`).
